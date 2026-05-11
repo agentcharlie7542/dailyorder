@@ -368,23 +368,42 @@ function escapeHtml(s) {
 
 downloadBtn.addEventListener("click", () => {
   if (!lastResults) return;
-  const out = lastResults.flatMap(r => {
+  const rows = lastResults.flatMap(r => {
     if (r.mapped.length === 0) {
       return [{
-        "관리번호":r["관리번호"]||"", "판매처이름":r["판매처이름"]||"",
-        "상품명":r["상품명"]||"", "옵션":r["옵션"]||"", "주문수량":r["수량"]||1,
-        "상품코드":"", "매핑상품명":"", "분리수량":"", "방법":r.method, "신뢰도":r.confidence
+        "_orderKey": r["관리번호"] || r["판매처이름"] || String(r._idx),
+        "판매처명": r["판매처이름"] || "",
+        "판매처 상품코드": r["관리번호"] || "",
+        "판매처 옵션": r["옵션"] || "",
+        "상품코드": "",
+        "수량": "",
+        "판매처 상품명": r["상품명"] || ""
       }];
     }
     return r.mapped.map(m => ({
-      "관리번호":r["관리번호"]||"", "판매처이름":r["판매처이름"]||"",
-      "상품명":r["상품명"]||"", "옵션":r["옵션"]||"", "주문수량":r["수량"]||1,
-      "상품코드":m.code, "매핑상품명":m.name, "분리수량":m.qty, "방법":r.method, "신뢰도":r.confidence
+      "_orderKey": r["관리번호"] || r["판매처이름"] || String(r._idx),
+      "판매처명": r["판매처이름"] || "",
+      "판매처 상품코드": r["관리번호"] || "",
+      "판매처 옵션": r["옵션"] || "",
+      "상품코드": m.code,
+      "수량": m.qty,
+      "판매처 상품명": r["상품명"] || ""
     }));
   });
-  const ws = XLSX.utils.json_to_sheet(out);
+
+  // 같은 주문번호(판매처 상품코드) 기준으로 정렬하여 묶기
+  rows.sort((a, b) => {
+    if (a._orderKey < b._orderKey) return -1;
+    if (a._orderKey > b._orderKey) return 1;
+    return 0;
+  });
+
+  const out = rows.map(({ _orderKey, ...rest }) => rest);
+  const ws = XLSX.utils.json_to_sheet(out, {
+    header: ["판매처명", "판매처 상품코드", "판매처 옵션", "상품코드", "수량", "판매처 상품명"]
+  });
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "매핑결과");
+  XLSX.utils.book_append_sheet(wb, ws, "match_list");
   XLSX.writeFile(wb, lastFilename.replace(/\.[^.]+$/, "") + "_매핑결과.xlsx");
 });
 </script>
