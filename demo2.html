@@ -456,30 +456,43 @@ function padCode(code) {
 
 downloadBtn.addEventListener("click", () => {
   if (!lastResults) return;
-  // 1) 주문별로 행 생성 (mapped별 한 행씩, 미매핑은 빈 매핑 1행)
-  const groups = lastResults.map(r => {
-    const orderKey = r["관리번호"] || r["판매처이름"] || String(r._idx);
-    const sellerName = r["판매처이름"] || "";
-    const sellerCode = r["관리번호"] || "";
-    const sellerOption = r["옵션"] || "";
-    const sellerProductName = r["상품명"] || "";
-    const items = r.mapped.length === 0
-      ? [{ code: "", qty: "" }]
-      : r.mapped.map(m => ({ code: padCode(m.code), qty: m.qty }));
-    return { orderKey, sellerName, sellerCode, sellerOption, sellerProductName, items };
+
+  // 같은 관리번호(주문번호) 기준으로 그룹핑 — 원본 순서 유지
+  // 처음 등장한 위치에 그룹을 만들고, 같은 관리번호가 다시 나오면 그 그룹에 매핑 항목만 추가
+  const groupMap = new Map(); // key: 관리번호, value: groupObj
+  const groupOrder = [];      // 그룹 등장 순서(원본 순서 보존)
+
+  lastResults.forEach(r => {
+    const key = r["관리번호"] || ("__row_" + r._idx); // 관리번호 없으면 행 단위로 처리
+    if (!groupMap.has(key)) {
+      const g = {
+        orderKey: key,
+        sellerName: r["판매처이름"] || "",
+        sellerCode: r["관리번호"] || "",
+        sellerOption: r["옵션"] || "",
+        sellerProductName: r["상품명"] || "",
+        items: [],
+        anyUnmatched: false
+      };
+      groupMap.set(key, g);
+      groupOrder.push(key);
+    }
+    const g = groupMap.get(key);
+    if (r.mapped.length === 0) {
+      g.items.push({ code: "", qty: "" });
+      g.anyUnmatched = true;
+    } else {
+      r.mapped.forEach(m => g.items.push({ code: padCode(m.code), qty: m.qty }));
+    }
   });
 
-  // 2) 같은 주문번호(판매처 상품코드) 기준으로 정렬
-  groups.sort((a, b) => {
-    if (a.orderKey < b.orderKey) return -1;
-    if (a.orderKey > b.orderKey) return 1;
-    return 0;
-  });
-
-  // 3) 같은 주문 첫 행만 판매처 정보, 이후 행은 빈 셀 (병합 표시)
+  // 같은 관리번호의 첫 행만 판매처 정보, 이후 행은 비움 — 원본 순서 그대로 출력
   const out = [];
-  groups.forEach(g => {
-    g.items.forEach((it, idx) => {
+  groupOrder.forEach(key => {
+    const g = groupMap.get(key);
+    const items = g.items.length ? g.items : [{ code: "", qty: "" }];
+    items.forEach((it, idx) => {
+      const isUnmatched = (it.code === "" || it.code === null || it.code === undefined);
       if (idx === 0) {
         out.push({
           "판매처명": g.sellerName,
@@ -487,7 +500,8 @@ downloadBtn.addEventListener("click", () => {
           "판매처 옵션": g.sellerOption,
           "상품코드": it.code,
           "수량": it.qty,
-          "판매처 상품명": g.sellerProductName
+          "판매처 상품명": g.sellerProductName,
+          "비고": isUnmatched ? "★" : ""
         });
       } else {
         out.push({
@@ -496,14 +510,15 @@ downloadBtn.addEventListener("click", () => {
           "판매처 옵션": "",
           "상품코드": it.code,
           "수량": it.qty,
-          "판매처 상품명": ""
+          "판매처 상품명": "",
+          "비고": isUnmatched ? "★" : ""
         });
       }
     });
   });
 
   const ws = XLSX.utils.json_to_sheet(out, {
-    header: ["판매처명", "판매처 상품코드", "판매처 옵션", "상품코드", "수량", "판매처 상품명"]
+    header: ["판매처명", "판매처 상품코드", "판매처 옵션", "상품코드", "수량", "판매처 상품명", "비고"]
   });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "match_list");
