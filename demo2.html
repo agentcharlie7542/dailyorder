@@ -280,6 +280,130 @@ function parseInlineFlavors(text, baseSize, orderQty) {
   return found.length ? found : null;
 }
 
+// ============================================================
+// 답안지 학습으로 추출한 단독특가 → 자동 SKU 매핑 (100% 일치)
+// ============================================================
+const SPECIAL_OFFER_RULES = [
+  { pattern: /트라이탄\s*쉐이커?\s*보틀\s*350ml/i, code: 35, name: "밀잇 전용 친환경 트라이탄 보틀" },
+  { pattern: /\[\d+월단독특가\][^,<]*딸기맛?\s*식사대용\s*쉐이크\s*450g/i, code: 2, name: "밀잇 딸기맛 450g" },
+  { pattern: /\[입문자\s*추천\][^,<]*포켓형[^,<]*스타터팩\s*7종/i, code: 64, name: "밀잇 스타터팩(7개입) 40g" },
+  { pattern: /\[혈당DOWN\][^,<]*애사비\s*젤리컷/i, code: 33, name: "밀잇 웰니스 애사비 젤리컷 8000" },
+  { pattern: /애사비\s*젤리컷\s*8000/i, code: 33, name: "밀잇 웰니스 애사비 젤리컷 8000" },
+];
+
+// ============================================================
+// 패키지 옵션에 보틀 자동 포함 케이스
+// ============================================================
+const BOTTLE_AUTO_PATTERNS = [
+  /\[보틀증정\]/i,
+  /\(\+\s*보틀\s*증정\s*\)/i,
+  /보틀\s*증정/i,
+];
+
+// ============================================================
+// 스타터팩 키워드 인식 (사이즈/개입수 자동 판별)
+// ============================================================
+function detectStarterPackSKU(text) {
+  if (!text) return null;
+  if (/스타터팩\s*10\s*개입|10\s*개입.*\[.*피스타.*멜론.*초코.*커피.*바나나.*말차.*시리얼/.test(text)) return {code:66, name:"밀잇 스타터팩(10개입) 40g"};
+  if (/스타터팩\s*5\s*개입|5\s*개입.*\[.*피스타.*멜론.*초코.*커피.*바나나/.test(text)) return {code:65, name:"밀잇 스타터팩(5개입) 40g"};
+  if (/스타터팩\s*7\s*개입|스타터팩\s*7\s*종|포켓형.*스타터팩\s*7/.test(text)) return {code:64, name:"밀잇 스타터팩(7개입) 40g"};
+  if (/스타터팩\s*5\s*종/.test(text)) return {code:65, name:"밀잇 스타터팩(5개입) 40g"};
+  return null;
+}
+
+// ============================================================
+// 카페24 <추가옵션> 토큰 파서
+// 예: "NEW 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 미숫가루맛 세트(7개입) 1개"
+// ============================================================
+function parseAddOptionTokens(addOptText, orderQty, globalCtx) {
+  if (!addOptText) return [];
+  const cleaned = addOptText.replace(/맛\s*선택\s*=/g, "");
+  const tokens = cleaned.split(/\s*,\s*/);
+  const found = [];
+
+  for (let raw of tokens) {
+    raw = raw.replace(/^(NEW|UPGRADE|BEST|HOT|리뉴얼)\s*/i, "").trim();
+    if (!raw || /^-$|^선택안함$|^필요없음$|^없음$/.test(raw)) continue;
+
+    const flavor = detectFlavor(raw);
+    if (!flavor || flavor === "보틀" || flavor === "스타터팩") continue;
+
+    // 사이즈 판별: "세트(7개입)" 또는 "세트" 또는 "7개입" → 7개입, "대용량" → 560g, "식사대용/450g" → 450g, "40g/낱포/포켓" → 40g
+    let size;
+    if (/세트\s*\(?\s*7\s*개입|7\s*개입|세트/i.test(raw)) size = "7개입";
+    else if (/대용량|560\s*g/i.test(raw)) size = "560g";
+    else if (/식사대용|450\s*g/i.test(raw)) size = "450g";
+    else if (/40\s*g|낱포|포켓/i.test(raw)) size = "40g";
+    else size = detectSize(raw, globalCtx) || "560g";
+
+    const qty = detectQty(raw) * orderQty;
+    const sku = lookupSKU(flavor, size);
+    if (!sku) continue;
+
+    const existing = found.find(f => f.code === sku.code);
+    if (existing) existing.qty += qty;
+    else found.push({code:sku.code, name:sku.name, qty:qty, src:raw});
+  }
+  return found;
+}
+
+// ============================================================
+// 카카오톡/카카오선물 21개입 분해
+// 예: "21개입 (바나나맛 7개 멜론맛 7개 피스타치오맛 7개)"
+// ============================================================
+function parseKakaoMultiPocket(text, orderQty) {
+  if (!text) return null;
+  if (!/\d+개입\s*\(/.test(text)) return null;
+  const m = text.match(/\(([^)]+)\)/);
+  if (!m) return null;
+  const inner = m[1];
+  const re = /(쿠키앤크림|말차초코쿠키|미숫가루|피스타치오|초코바나나|흑임자|시리얼|바나나|멜론|커피|초콜릿|초코|딸기)맛?\s*(\d+)\s*개?/g;
+  const found = [];
+  let mm;
+  while ((mm = re.exec(inner)) !== null) {
+    const flavor = FLAVOR_ALIASES[mm[1].toLowerCase()] || FLAVOR_ALIASES[mm[1]];
+    if (!flavor) continue;
+    const cnt = parseInt(mm[2]);
+    // 7개씩 묶이면 7개입 SKU 1개로, 그렇지 않으면 40g 단품
+    const size = (cnt % 7 === 0) ? "7개입" : "40g";
+    const sku = lookupSKU(flavor, size);
+    if (!sku) continue;
+    const qty = (size === "7개입" ? cnt / 7 : cnt) * orderQty;
+    found.push({code:sku.code, name:sku.name, qty:qty, src:mm[0]});
+  }
+  return found.length ? found : null;
+}
+
+// ============================================================
+// 지그재그 "맛 선택1:flavor N통,맛 선택2:flavor N통" 패턴
+// ============================================================
+function parseZigzagFlavorSelect(text, baseSize, orderQty) {
+  if (!text) return null;
+  const re = /(?:맛\s*선택\s*\d*|첫번째\s*맛|두번째\s*맛|필수\s*선택)\s*[:=]\s*([^,/]+?)(?=\s*(?:,|$|맛\s*선택|첫번째|두번째|필수\s*선택))/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const seg = m[1].trim();
+    if (/^선택안함$|^필요없음$|^없음$|^-$/.test(seg)) continue;
+    const flavor = detectFlavor(seg);
+    if (!flavor || flavor === "보틀") continue;
+    let size;
+    if (/7\s*개입|세트/i.test(seg)) size = "7개입";
+    else if (/대용량|560\s*g/i.test(seg)) size = "560g";
+    else if (/식사대용|450\s*g/i.test(seg)) size = "450g";
+    else if (/40\s*g|포켓|낱포/i.test(seg)) size = "40g";
+    else size = baseSize;
+    const qty = detectQty(seg) * orderQty;
+    const sku = lookupSKU(flavor, size);
+    if (!sku) continue;
+    const existing = found.find(f => f.code === sku.code);
+    if (existing) existing.qty += qty;
+    else found.push({code:sku.code, name:sku.name, qty:qty, src:seg});
+  }
+  return found.length ? found : null;
+}
+
 function mapOrder(row) {
   const productName = row["상품명"] || "";
   const optionRaw = row["옵션"] || "";
@@ -287,21 +411,79 @@ function mapOrder(row) {
   const optionNorm = normalize(optionRaw);
   const globalCtx = productName + " " + optionRaw;
   const hasGift = /\[\+\s*포켓\s*3\s*종\s*\]/.test(optionRaw);
-  // 보틀 사은품 자동 감지 (옵션이나 상품명에 "보틀 증정" 등의 키워드)
-  const hasBottleGift = /(보틀\s*\d*\s*ml\s*\d*개?\s*증정|트라이탄.*증정|쉐이커.*증정)/.test(globalCtx);
+  const hasBottleAuto = BOTTLE_AUTO_PATTERNS.some(re => re.test(globalCtx));
   const mapped = [];
   let method = "rule", confidence = 0.7;
 
-  // 1) 스타터팩 [세부맛] 패턴 우선 처리
+  // 0) <추가옵션> 분리 (카페24 형식)
+  let mainOpt = optionNorm, addOpt = "";
+  const splitAdd = optionNorm.split(/<추가옵션>|\|\s*<추가옵션>|\s*\|\s*$/);
+  if (splitAdd.length > 1) { mainOpt = splitAdd[0]; addOpt = splitAdd.slice(1).join(" "); }
+  // normalize()에서 이미 <추가옵션>을 " | "로 치환했을 수도 있음
+  if (!addOpt && / \| /.test(optionNorm)) {
+    const parts = optionNorm.split(/ \| /);
+    mainOpt = parts[0]; addOpt = parts.slice(1).join(" ");
+  }
+
+  // 1) 단독특가 자동 SKU
+  SPECIAL_OFFER_RULES.forEach(rule => {
+    if (rule.pattern.test(globalCtx) && !mapped.find(m => m.code === rule.code)) {
+      mapped.push({code:rule.code, name:rule.name, qty:orderQty, src:"단독특가"});
+    }
+  });
+
+  // 2) 스타터팩 키워드 매핑 (10/7/5개입)
+  const starterSKU = detectStarterPackSKU(globalCtx);
+  if (starterSKU && !mapped.find(m => m.code === starterSKU.code)) {
+    mapped.push({code:starterSKU.code, name:starterSKU.name, qty:orderQty, src:"스타터팩 키워드"});
+  }
+
+  // 3) 스타터팩 [초코(2) 말차(1)...] 괄호 패턴 분해
   const starterMatch = parseStarterPackBracket(globalCtx, detectSize(globalCtx) || "40g", orderQty);
-  if (starterMatch) {
+  if (starterMatch && starterMatch.length > 1) {
+    // 다종 분해는 단일 스타터팩 SKU를 대체
+    if (starterSKU) {
+      const idx = mapped.findIndex(m => m.code === starterSKU.code);
+      if (idx >= 0) mapped.splice(idx, 1);
+    }
     starterMatch.forEach(s => mapped.push(s));
     method = "starter_bracket"; confidence = 0.85;
   }
 
+  // 4) 카카오톡 21개입 (멀티 7개입 분해)
+  const kakaoMulti = parseKakaoMultiPocket(globalCtx, orderQty);
+  if (kakaoMulti && kakaoMulti.length) {
+    kakaoMulti.forEach(s => {
+      if (!mapped.find(m => m.code === s.code)) mapped.push(s);
+    });
+    method = "kakao_multi"; confidence = 0.85;
+  }
+
+  // 5) 카페24 추가옵션 토큰 파싱
+  const addItems = parseAddOptionTokens(addOpt, orderQty, globalCtx);
+  if (addItems.length > 0) {
+    addItems.forEach(it => {
+      const existing = mapped.find(m => m.code === it.code);
+      if (existing) existing.qty += it.qty;
+      else mapped.push(it);
+    });
+    method = "add_option_tokens"; confidence = 0.9;
+  }
+
+  // 6) 지그재그 맛 선택 패턴
+  if (mapped.length === 0 || addItems.length === 0) {
+    const zz = parseZigzagFlavorSelect(globalCtx, detectSize(globalCtx) || "560g", orderQty);
+    if (zz && zz.length) {
+      zz.forEach(s => {
+        if (!mapped.find(m => m.code === s.code)) mapped.push(s);
+      });
+      method = "zigzag_select"; confidence = 0.85;
+    }
+  }
+
+  // 7) 옵션 없는 경우 - 상품명에서 직접 추출
   if (mapped.length === 0) {
     if (!optionNorm || /^선택안함$|^필요없음$|^없음$/.test(optionNorm.trim())) {
-      // 옵션 없음: 상품명 기반 추출 (맛 1개 또는 여러개)
       const baseSize = detectSize(productName) || "560g";
       const inline = parseInlineFlavors(productName, baseSize, orderQty);
       if (inline && inline.length > 0) {
@@ -310,15 +492,23 @@ function mapOrder(row) {
         confidence = inline.length > 1 ? 0.8 : 0.75;
       }
     } else {
-      const tokens = splitTokens(optionNorm);
+      // 일반 토큰 분리
+      const tokens = splitTokens(mainOpt || optionNorm);
       let matchedAny = false;
       for (const rawTok of tokens) {
         const tok = cleanToken(rawTok);
         if (!tok || tok.length < 2) continue;
         if (NOISE_TOKENS.some(n => tok === n)) continue;
         const f = detectFlavor(tok);
-        if (!f) continue;
+        if (!f || f === "스타터팩") continue;
         const s = detectSize(tok, globalCtx) || detectSize(productName) || "560g";
+        if (f === "보틀") {
+          if (!mapped.find(m => m.code === 35)) {
+            mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:detectQty(tok)*orderQty, src:tok});
+            matchedAny = true;
+          }
+          continue;
+        }
         const sku = lookupSKU(f, s);
         if (!sku) continue;
         const q = detectQty(tok) * orderQty;
@@ -328,20 +518,11 @@ function mapOrder(row) {
         matchedAny = true;
       }
       if (!matchedAny) {
-        // fallback: 옵션 전체에서 맛 패턴 다중 추출
         const baseSize = detectSize(globalCtx) || "560g";
         const inline = parseInlineFlavors(optionNorm, baseSize, orderQty);
         if (inline && inline.length > 0) {
           inline.forEach(i => mapped.push({code:i.code, name:i.name, qty:i.qty, src:i.src}));
           method = "fallback_inline"; confidence = 0.7;
-        } else {
-          const f = detectFlavor(globalCtx);
-          const s = detectSize(globalCtx) || "560g";
-          const sku = lookupSKU(f, s);
-          if (sku) {
-            mapped.push({code:sku.code, name:sku.name, qty:orderQty, src:"fallback"});
-            method = "fallback"; confidence = 0.5;
-          }
         }
       } else {
         method = "generic_tokens"; confidence = 0.8;
@@ -349,12 +530,14 @@ function mapOrder(row) {
     }
   }
 
+  // 8) 사은품: 포켓 3종 / 보틀 자동
   if (hasGift && !mapped.find(m=>m.code===82)) {
     mapped.push({code:82, name:"밀잇 포캣3종 (피+초+시)", qty:orderQty, src:"[+포켓 3종]"});
   }
-  if (hasBottleGift && !mapped.find(m=>m.code===35)) {
-    mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:orderQty, src:"보틀 증정"});
+  if (hasBottleAuto && !mapped.find(m=>m.code===35)) {
+    mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:orderQty, src:"보틀 자동"});
   }
+
   return {
     mapped, method,
     confidence: mapped.length ? confidence : 0,
