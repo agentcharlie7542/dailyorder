@@ -96,6 +96,55 @@
   ⚠️ 본 데모는 1,090건의 학습 데이터에서 추출한 규칙 기반 매핑 엔진입니다. 학습데이터 자체 검증 92.8%, 신규 주문은 90% 이상 신뢰도 매핑이 목표이며, 신뢰도가 낮은 행은 노란/빨간 배경으로 표시됩니다. 실제 운영 시에는 Cloudflare Workers + KV 캐시 + 관리자 승인 큐가 추가됩니다.
 </div>
 
+<!-- ============================================================
+     사용자 정의 매핑 패턴 추가 박스
+     ============================================================ -->
+<div id="customRules" style="margin-top:32px; padding:20px; border:1px solid #e5e7eb; border-radius:12px; background:#fafafa;">
+  <h2 style="font-size:18px; margin:0 0 6px;">🧩 사용자 정의 매핑 패턴 추가</h2>
+  <p style="font-size:13px; color:#6b7280; margin:0 0 16px;">
+    미매핑(★)이거나 잘못 매핑된 케이스의 패턴을 추가하면 다음 매핑부터 자동 적용됩니다. (브라우저에 저장 · localStorage)
+  </p>
+
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+    <div>
+      <label style="font-size:12px; font-weight:600; color:#374151;">매칭 패턴 (텍스트 일부 또는 정규식)</label>
+      <input id="cr_pattern" type="text" placeholder="예: 마스터 키트 5통+포켓 21개입"
+        style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; margin-top:4px;">
+    </div>
+    <div>
+      <label style="font-size:12px; font-weight:600; color:#374151;">매칭 대상</label>
+      <select id="cr_target" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; margin-top:4px;">
+        <option value="all">전체 (상품명 + 옵션)</option>
+        <option value="option">옵션만</option>
+        <option value="name">상품명만</option>
+      </select>
+    </div>
+  </div>
+
+  <div>
+    <label style="font-size:12px; font-weight:600; color:#374151;">매핑 결과 (상품코드:수량, 콤마로 여러 개 입력)</label>
+    <input id="cr_result" type="text" placeholder="예: 35:1, 24:2, 64:1"
+      style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; margin-top:4px;">
+    <div style="font-size:11px; color:#9ca3af; margin-top:4px;">
+      형식: <code>상품코드:수량</code> (수량은 주문수량과 곱해짐). 예) <code>35:1, 24:2</code> = 보틀 1개 + 쿠키앤크림 560g 2개
+    </div>
+  </div>
+
+  <div style="margin-top:14px; display:flex; gap:8px; align-items:center;">
+    <button id="cr_addBtn" style="background:#059669;">＋ 패턴 추가</button>
+    <button id="cr_exportBtn" style="background:#0ea5e9;">📤 내보내기 (JSON)</button>
+    <button id="cr_importBtn" style="background:#8b5cf6;">📥 가져오기</button>
+    <input id="cr_importFile" type="file" accept=".json" style="display:none;">
+    <button id="cr_clearBtn" style="background:#dc2626;">🗑 전체 삭제</button>
+    <span id="cr_status" style="font-size:12px; color:#6b7280; margin-left:auto;"></span>
+  </div>
+
+  <div style="margin-top:16px;">
+    <div style="font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">등록된 사용자 정의 패턴 (<span id="cr_count">0</span>)</div>
+    <div id="cr_list" style="border:1px solid #e5e7eb; border-radius:8px; max-height:300px; overflow:auto; background:#fff;"></div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // SKU 카탈로그 (45종)
@@ -404,6 +453,44 @@ function parseZigzagFlavorSelect(text, baseSize, orderQty) {
   return found.length ? found : null;
 }
 
+// ============================================================
+// 사용자 정의 매핑 규칙 (localStorage 저장)
+// ============================================================
+const CUSTOM_RULES_KEY = "mealit_custom_rules_v1";
+function loadCustomRules() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_RULES_KEY) || "[]"); }
+  catch(e) { return []; }
+}
+function saveCustomRules(rules) {
+  localStorage.setItem(CUSTOM_RULES_KEY, JSON.stringify(rules));
+}
+function applyCustomRules(productName, optionRaw, orderQty) {
+  const rules = loadCustomRules();
+  const matched = [];
+  rules.forEach(rule => {
+    const haystack = rule.target === "option" ? optionRaw
+                   : rule.target === "name" ? productName
+                   : (productName + " " + optionRaw);
+    let isMatch = false;
+    try {
+      // 정규식 표기 (/pattern/flags) 지원, 아니면 단순 포함 검색
+      if (/^\/.+\/[gimsuy]*$/.test(rule.pattern)) {
+        const m = rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);
+        isMatch = new RegExp(m[1], m[2]).test(haystack);
+      } else {
+        isMatch = haystack.toLowerCase().includes(rule.pattern.toLowerCase());
+      }
+    } catch(e) { isMatch = false; }
+    if (!isMatch) return;
+    rule.results.forEach(r => {
+      const sku = SKU_CATALOG.find(s => s.code === r.code);
+      const name = sku ? sku.name : ("코드 " + r.code);
+      matched.push({code: r.code, name, qty: r.qty * orderQty, src: "custom: " + rule.pattern});
+    });
+  });
+  return matched;
+}
+
 function mapOrder(row) {
   const productName = row["상품명"] || "";
   const optionRaw = row["옵션"] || "";
@@ -414,6 +501,23 @@ function mapOrder(row) {
   const hasBottleAuto = BOTTLE_AUTO_PATTERNS.some(re => re.test(globalCtx));
   const mapped = [];
   let method = "rule", confidence = 0.7;
+
+  // -1) 사용자 정의 규칙 최우선 적용
+  const customMatched = applyCustomRules(productName, optionRaw, orderQty);
+  if (customMatched.length > 0) {
+    customMatched.forEach(c => {
+      if (!mapped.find(m => m.code === c.code)) mapped.push(c);
+    });
+    method = "custom_rule"; confidence = 1.0;
+    // 사용자 규칙이 매핑을 결정했으면 기본 파이프라인 건너뜀
+    if (hasGift && !mapped.find(m=>m.code===82)) {
+      mapped.push({code:82, name:"밀잇 포캣3종 (피+초+시)", qty:orderQty, src:"[+포켓 3종]"});
+    }
+    if (hasBottleAuto && !mapped.find(m=>m.code===35)) {
+      mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:orderQty, src:"보틀 자동"});
+    }
+    return { mapped, method, confidence, status: "ok" };
+  }
 
   // 0) <추가옵션> 분리 (카페24 형식)
   let mainOpt = optionNorm, addOpt = "";
@@ -707,6 +811,141 @@ downloadBtn.addEventListener("click", () => {
   XLSX.utils.book_append_sheet(wb, ws, "match_list");
   XLSX.writeFile(wb, lastFilename.replace(/\.[^.]+$/, "") + "_매핑결과.xlsx");
 });
+
+// ============================================================
+// 사용자 정의 패턴 UI 동작
+// ============================================================
+const cr_pattern = document.getElementById("cr_pattern");
+const cr_target  = document.getElementById("cr_target");
+const cr_result  = document.getElementById("cr_result");
+const cr_addBtn  = document.getElementById("cr_addBtn");
+const cr_exportBtn = document.getElementById("cr_exportBtn");
+const cr_importBtn = document.getElementById("cr_importBtn");
+const cr_importFile = document.getElementById("cr_importFile");
+const cr_clearBtn = document.getElementById("cr_clearBtn");
+const cr_list = document.getElementById("cr_list");
+const cr_count = document.getElementById("cr_count");
+const cr_status = document.getElementById("cr_status");
+
+function parseResultString(s) {
+  // "35:1, 24:2" → [{code:35, qty:1}, {code:24, qty:2}]
+  const items = [];
+  s.split(/\s*,\s*/).forEach(part => {
+    const m = part.match(/^\s*(\d+)\s*[:x×*]\s*(\d+)\s*$/);
+    if (m) items.push({ code: parseInt(m[1]), qty: parseInt(m[2]) });
+    else {
+      const single = part.match(/^\s*(\d+)\s*$/);
+      if (single) items.push({ code: parseInt(single[1]), qty: 1 });
+    }
+  });
+  return items;
+}
+function showStatus(msg, color) {
+  cr_status.textContent = msg;
+  cr_status.style.color = color || "#6b7280";
+  setTimeout(() => { cr_status.textContent = ""; }, 3000);
+}
+function renderRulesList() {
+  const rules = loadCustomRules();
+  cr_count.textContent = rules.length;
+  if (rules.length === 0) {
+    cr_list.innerHTML = '<div style="padding:16px; text-align:center; color:#9ca3af; font-size:13px;">등록된 규칙이 없습니다.</div>';
+    return;
+  }
+  const targetLabel = {all:"전체", option:"옵션", name:"상품명"};
+  cr_list.innerHTML = rules.map((r, i) => {
+    const resultStr = r.results.map(x => {
+      const sku = SKU_CATALOG.find(s => s.code === x.code);
+      const nm = sku ? sku.name : "코드 " + x.code;
+      return `<span class="badge qty">${x.code}</span> ${escapeHtml(nm)} ×${x.qty}`;
+    }).join(" + ");
+    return `
+      <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid #f3f4f6; font-size:13px;">
+        <div style="flex:0 0 28px; font-weight:600; color:#6b7280;">#${i+1}</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; color:#1f2937; word-break:break-all;">${escapeHtml(r.pattern)}</div>
+          <div style="font-size:11px; color:#6b7280; margin-top:2px;">대상: ${targetLabel[r.target]||r.target} · ${escapeHtml(r.note||"")}</div>
+          <div style="margin-top:4px;">→ ${resultStr}</div>
+        </div>
+        <button data-idx="${i}" class="cr_delBtn" style="background:#ef4444; padding:4px 10px; font-size:12px;">삭제</button>
+      </div>
+    `;
+  }).join("");
+  cr_list.querySelectorAll(".cr_delBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx);
+      const rs = loadCustomRules();
+      rs.splice(idx, 1);
+      saveCustomRules(rs);
+      renderRulesList();
+      showStatus("규칙이 삭제되었습니다.", "#dc2626");
+      // 결과가 이미 있으면 재매핑 적용
+      if (lastResults) reprocessLastResults();
+    });
+  });
+}
+function reprocessLastResults() {
+  if (!lastResults) return;
+  const rerun = lastResults.map(r => {
+    const original = {"관리번호":r["관리번호"],"판매처이름":r["판매처이름"],"상품명":r["상품명"],"옵션":r["옵션"],"수량":r["수량"]};
+    return {...r, ...mapOrder(original)};
+  });
+  lastResults = rerun;
+  renderStats(rerun);
+  renderTable(rerun);
+}
+
+cr_addBtn.addEventListener("click", () => {
+  const pattern = cr_pattern.value.trim();
+  const target = cr_target.value;
+  const resultStr = cr_result.value.trim();
+  if (!pattern) { showStatus("패턴을 입력해 주세요.", "#dc2626"); return; }
+  const results = parseResultString(resultStr);
+  if (results.length === 0) { showStatus("매핑 결과 형식이 잘못되었습니다.", "#dc2626"); return; }
+  const invalid = results.find(r => !SKU_CATALOG.find(s => s.code === r.code));
+  if (invalid) { showStatus("상품코드 " + invalid.code + "는 카탈로그에 없습니다.", "#dc2626"); return; }
+  const rules = loadCustomRules();
+  rules.push({ pattern, target, results, createdAt: new Date().toISOString() });
+  saveCustomRules(rules);
+  cr_pattern.value = ""; cr_result.value = "";
+  renderRulesList();
+  showStatus("✓ 패턴이 추가되었습니다. 이후 매핑부터 자동 적용됩니다.", "#059669");
+  if (lastResults) reprocessLastResults();
+});
+cr_exportBtn.addEventListener("click", () => {
+  const rules = loadCustomRules();
+  const blob = new Blob([JSON.stringify(rules, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "mealit_custom_rules.json"; a.click();
+  URL.revokeObjectURL(url);
+});
+cr_importBtn.addEventListener("click", () => cr_importFile.click());
+cr_importFile.addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (!Array.isArray(imported)) throw new Error("invalid");
+      const existing = loadCustomRules();
+      saveCustomRules(existing.concat(imported));
+      renderRulesList();
+      showStatus("✓ " + imported.length + "개 규칙을 가져왔습니다.", "#059669");
+      if (lastResults) reprocessLastResults();
+    } catch(err) { showStatus("JSON 파일 형식 오류", "#dc2626"); }
+  };
+  reader.readAsText(f);
+  cr_importFile.value = "";
+});
+cr_clearBtn.addEventListener("click", () => {
+  if (!confirm("등록된 모든 사용자 정의 규칙을 삭제하시겠습니까?")) return;
+  saveCustomRules([]);
+  renderRulesList();
+  showStatus("모든 규칙이 삭제되었습니다.", "#dc2626");
+  if (lastResults) reprocessLastResults();
+});
+renderRulesList();
 </script>
 
 </body>
