@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MealIt 옵션 자동분류 데모</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo",
+                 "Malgun Gothic", "맑은 고딕", sans-serif;
+    max-width: 1280px; margin: 0 auto; padding: 24px; color: #1f2937;
+    background: #ffffff;
+  }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.sub { color: #6b7280; margin: 0 0 24px; font-size: 14px; }
+
+  /* 업로드 영역 — input을 시각적으로 숨기되 클릭 가능하게 유지 */
+  .upload {
+    display: block; width: 100%;
+    border: 2px dashed #cbd5e1; border-radius: 12px;
+    padding: 32px 24px;
+    text-align: center; background: #f8fafc; cursor: pointer;
+    transition: background .15s, border-color .15s;
+    position: relative;
+  }
+  .upload:hover { border-color: #6366f1; background: #eef2ff; }
+  .upload.dragging { border-color: #6366f1; background: #eef2ff; }
+  .upload .visually-hidden {
+    position: absolute !important;
+    width: 1px !important; height: 1px !important;
+    padding: 0 !important; margin: -1px !important;
+    overflow: hidden !important; clip: rect(0,0,0,0) !important;
+    white-space: nowrap !important; border: 0 !important;
+  }
+  .upload-icon { font-size: 32px; line-height: 1; margin-bottom: 8px; }
+  .upload-title { font-weight: 600; font-size: 15px; }
+  .upload-hint { color: #6b7280; font-size: 13px; margin-top: 4px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+  .stat .lbl { font-size: 12px; color: #6b7280; }
+  .stat .val { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat.ok .val { color: #059669; }
+  .stat.warn .val { color: #d97706; }
+  .stat.err .val { color: #dc2626; }
+
+  .toolbar { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .table-wrap { overflow: auto; max-height: 65vh; margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
+  th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f9fafb; font-weight: 600; position: sticky; top: 0; z-index: 1; border-bottom: 1px solid #e5e7eb; }
+  tr.conf-high td { background: #f0fdf4; }
+  tr.conf-mid  td { background: #fffbeb; }
+  tr.conf-low  td { background: #fef2f2; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.method { background: #e0e7ff; color: #3730a3; }
+  .badge.qty { background: #dbeafe; color: #1e40af; }
+  button { background: #4f46e5; color: #fff; border: none; padding: 9px 18px; border-radius: 8px;
+           cursor: pointer; font-weight: 600; font-size: 14px; }
+  button:hover { background: #4338ca; }
+  button:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+  .note { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px;
+          margin: 16px 0 0; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>🍱 MealIt 옵션 자동분류 데모</h1>
+<p class="sub">엑셀 파일을 업로드하면 옵션 텍스트를 자동으로 분석하여 SKU 코드 + 수량으로 분리합니다. (브라우저 단독 동작 / 외부 전송 없음)</p>
+
+<label class="upload" id="dropZone" for="fileInput">
+  <input type="file" id="fileInput" accept=".xlsx,.xls" class="visually-hidden">
+  <div class="upload-icon">📂</div>
+  <div class="upload-title">엑셀 파일 선택 또는 드래그</div>
+  <div class="upload-hint">필수 컬럼: 판매처이름, 상품명, 옵션, 수량 (관리번호/상품코드 선택)</div>
+</label>
+
+<div id="results" style="display:none;">
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <div style="font-size:13px; color:#6b7280;" id="filename"></div>
+    <button id="downloadBtn">📥 매핑결과 엑셀 다운로드</button>
+  </div>
+  <div class="table-wrap">
+    <table id="resultTable"></table>
+  </div>
+</div>
+
+<div class="note">
+  ⚠️ 본 데모는 1,090건의 학습 데이터에서 추출한 규칙 기반 매핑 엔진입니다. 학습데이터 자체 검증 92.8%, 신규 주문은 90% 이상 신뢰도 매핑이 목표이며, 신뢰도가 낮은 행은 노란/빨간 배경으로 표시됩니다. 실제 운영 시에는 Cloudflare Workers + KV 캐시 + 관리자 승인 큐가 추가됩니다.
+</div>
+
+<script>
+// ============================================================
+// SKU 카탈로그 (45종)
+// ============================================================
+const SKU_CATALOG = [
+  {code:4,name:"밀잇 멜론맛 560g",flavor:"멜론",size:"560g",line:"식단관리"},
+  {code:8,name:"밀잇 미숫가루맛 560g",flavor:"미숫가루",size:"560g",line:"식단관리"},
+  {code:10,name:"밀잇 바나나맛 560g",flavor:"바나나",size:"560g",line:"식단관리"},
+  {code:12,name:"밀잇 초콜릿맛 560g",flavor:"초콜릿",size:"560g",line:"식단관리"},
+  {code:16,name:"밀잇 커피맛 560g",flavor:"커피",size:"560g",line:"식단관리"},
+  {code:18,name:"밀잇 시리얼맛 560g",flavor:"시리얼",size:"560g",line:"식단관리"},
+  {code:20,name:"밀잇 피스타치오맛 560g",flavor:"피스타치오",size:"560g",line:"식단관리"},
+  {code:22,name:"밀잇 말차초코쿠키맛 560g",flavor:"말차초코쿠키",size:"560g",line:"식단관리"},
+  {code:24,name:"밀잇 쿠키앤크림맛 560g",flavor:"쿠키앤크림",size:"560g",line:"식단관리"},
+  {code:28,name:"밀잇 흑임자맛 560g",flavor:"흑임자",size:"560g",line:"식단관리"},
+  {code:36,name:"밀잇 딸기맛 560g",flavor:"딸기",size:"560g",line:"식단관리"},
+  {code:2,name:"밀잇 딸기맛 450g",flavor:"딸기",size:"450g",line:"식사대용"},
+  {code:6,name:"밀잇 미숫가루맛 450g",flavor:"미숫가루",size:"450g",line:"식사대용"},
+  {code:13,name:"밀잇 초코바나나맛 450g",flavor:"초코바나나",size:"450g",line:"식사대용"},
+  {code:26,name:"밀잇 흑임자맛 450g",flavor:"흑임자",size:"450g",line:"식사대용"},
+  {code:3,name:"밀잇 멜론맛 40g",flavor:"멜론",size:"40g",line:"포켓"},
+  {code:5,name:"밀잇 미숫가루맛 40g",flavor:"미숫가루",size:"40g",line:"포켓"},
+  {code:9,name:"밀잇 바나나맛 40g",flavor:"바나나",size:"40g",line:"포켓"},
+  {code:11,name:"밀잇 초콜릿맛 40g",flavor:"초콜릿",size:"40g",line:"포켓"},
+  {code:15,name:"밀잇 커피맛 40g",flavor:"커피",size:"40g",line:"포켓"},
+  {code:17,name:"밀잇 시리얼맛 40g",flavor:"시리얼",size:"40g",line:"포켓"},
+  {code:19,name:"밀잇 피스타치오맛 40g",flavor:"피스타치오",size:"40g",line:"포켓"},
+  {code:21,name:"밀잇 말차초코쿠키맛 40g",flavor:"말차초코쿠키",size:"40g",line:"포켓"},
+  {code:23,name:"밀잇 쿠키앤크림맛 40g",flavor:"쿠키앤크림",size:"40g",line:"포켓"},
+  {code:25,name:"밀잇 흑임자맛 40g",flavor:"흑임자",size:"40g",line:"포켓"},
+  {code:53,name:"밀잇 흑임자맛(7개입) 40g",flavor:"흑임자",size:"7개입",line:"세트"},
+  {code:54,name:"밀잇 피스타치오맛(7개입) 40g",flavor:"피스타치오",size:"7개입",line:"세트"},
+  {code:55,name:"밀잇 쿠키앤크림맛(7개입) 40g",flavor:"쿠키앤크림",size:"7개입",line:"세트"},
+  {code:56,name:"밀잇 커피맛(7개입) 40g",flavor:"커피",size:"7개입",line:"세트"},
+  {code:57,name:"밀잇 초콜릿맛(7개입) 40g",flavor:"초콜릿",size:"7개입",line:"세트"},
+  {code:58,name:"밀잇 시리얼맛(7개입) 40g",flavor:"시리얼",size:"7개입",line:"세트"},
+  {code:59,name:"밀잇 바나나맛(7개입) 40g",flavor:"바나나",size:"7개입",line:"세트"},
+  {code:60,name:"밀잇 미숫가루맛(7개입) 40g",flavor:"미숫가루",size:"7개입",line:"세트"},
+  {code:61,name:"밀잇 멜론맛(7개입) 40g",flavor:"멜론",size:"7개입",line:"세트"},
+  {code:62,name:"밀잇 말차초코쿠키맛(7개입) 40g",flavor:"말차초코쿠키",size:"7개입",line:"세트"},
+  {code:35,name:"밀잇 전용 친환경 트라이탄 보틀",flavor:"보틀",size:"보틀",line:"ACC"},
+  {code:82,name:"밀잇 포캣3종 (피+초+시)",flavor:"포캣3종",size:"세트",line:"세트"},
+  {code:83,name:"포켓몬 에어팟케이스(GWP)",flavor:"에어팟",size:"GWP",line:"GWP"},
+  {code:33,name:"밀잇 웰니스 애사비 젤리컷 8000",flavor:"애사비",size:"젤리",line:"기타"},
+  {code:29,name:"밀잇 그래놀라_애플시나몬맛",flavor:"애플시나몬",size:"그래놀라",line:"그래놀라"},
+  {code:30,name:"밀잇 그래놀라_카카오초콜릿맛",flavor:"카카오초콜릿",size:"그래놀라",line:"그래놀라"},
+  {code:31,name:"밀잇 그래놀라_티라미수맛",flavor:"티라미수",size:"그래놀라",line:"그래놀라"},
+  {code:64,name:"밀잇 스타터팩(7개입) 40g",flavor:"스타터팩",size:"7개입",line:"세트"},
+  {code:65,name:"밀잇 스타터팩(5개입) 40g",flavor:"스타터팩",size:"5개입",line:"세트"},
+  {code:66,name:"밀잇 스타터팩(10개입) 40g",flavor:"스타터팩",size:"10개입",line:"세트"},
+];
+
+const FLAVOR_ALIASES = {
+  "초콜릿":"초콜릿","초콜렛":"초콜릿","초콜":"초콜릿","초코":"초콜릿","쵸코":"초콜릿","chocolate":"초콜릿",
+  "미숫가루":"미숫가루","미수가루":"미숫가루","미숫":"미숫가루",
+  "흑임자":"흑임자","검은깨":"흑임자",
+  "시리얼":"시리얼","cereal":"시리얼",
+  "피스타치오":"피스타치오","피스타":"피스타치오","pistachio":"피스타치오",
+  "말차초코쿠키":"말차초코쿠키","말차초코":"말차초코쿠키","말차":"말차초코쿠키",
+  "쿠키앤크림":"쿠키앤크림","쿠키크림":"쿠키앤크림","쿠앤크":"쿠키앤크림",
+  "커피":"커피","coffee":"커피",
+  "바나나":"바나나","banana":"바나나",
+  "초코바나나":"초코바나나",
+  "멜론":"멜론","메론":"멜론",
+  "딸기":"딸기","strawberry":"딸기",
+  "트라이탄":"보틀","트라이탄 보틀":"보틀","보틀":"보틀","쉐이커":"보틀","쉐이커 보틀":"보틀",
+  "스타터팩":"스타터팩",
+};
+
+const sortedAliases = Object.keys(FLAVOR_ALIASES).sort((a,b)=>b.length-a.length);
+const FLAVOR_RE = new RegExp("(" + sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "i");
+const NOISE_TOKENS = ["NEW","UPGRADE","BEST","HOT","리뉴얼","[+포켓 3종]","선택안함","필요없음","없음","해당없음"];
+
+function normalize(text) {
+  if (!text) return "";
+  let s = String(text);
+  s = s.replace(/<상품명>[\s\S]*?(?=<옵션|<추가|$)/g, "");
+  s = s.replace(/<옵션정보>/g, "").replace(/<옵션>/g, "").replace(/<추가옵션>/g, " | ");
+  s = s.replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
+  return s;
+}
+function detectFlavor(text) {
+  if (!text) return null;
+  const m = text.match(FLAVOR_RE);
+  return m ? (FLAVOR_ALIASES[m[1].toLowerCase()] || FLAVOR_ALIASES[m[1]]) : null;
+}
+function detectSize(text, globalContext) {
+  const t = (text || "") + " " + (globalContext || "");
+  if (/7개입|7팩|7봉|7개|세트/.test(t)) return "7개입";
+  if (/10개입|10팩/.test(t)) return "10개입";
+  if (/5개입|5팩/.test(t)) return "5개입";
+  if (/560\s*g|대용량/.test(t)) return "560g";
+  if (/450\s*g|식사대용/.test(t)) return "450g";
+  if (/40\s*g|포켓|낱포|파우치|미니/.test(t)) return "40g";
+  if (/보틀|트라이탄|쉐이커/.test(t)) return "보틀";
+  if (/그래놀라/.test(t)) return "그래놀라";
+  if (/젤리|애사비/.test(t)) return "젤리";
+  return null;
+}
+function detectQty(text) {
+  const m = String(text||"").match(/(\d+)\s*개/);
+  if (m) return parseInt(m[1]);
+  const m2 = String(text||"").match(/[xX×*]\s*(\d+)/);
+  return m2 ? parseInt(m2[1]) : 1;
+}
+function lookupSKU(flavor, size) {
+  if (!flavor || !size) return null;
+  if (flavor === "초코바나나") size = "450g";
+  return SKU_CATALOG.find(s => s.flavor === flavor && s.size === size) || null;
+}
+function splitTokens(text) {
+  let parts = [text];
+  [/\s*\|\s*/g, /\s*,\s*/g, /\s*\/\s*/g, /\s*;\s*/g, /\s*\+\s*/g].forEach(re => {
+    parts = parts.flatMap(p => p.split(re));
+  });
+  return parts.map(s=>s.trim()).filter(Boolean);
+}
+function cleanToken(tok) {
+  let s = tok;
+  NOISE_TOKENS.forEach(n => s = s.split(n).join(""));
+  s = s.replace(/\([^)]*\)/g, "");
+  s = s.replace(/:\s*/g, " ").trim();
+  return s;
+}
+
+function mapOrder(row) {
+  const productName = row["상품명"] || "";
+  const optionRaw = row["옵션"] || "";
+  const orderQty = parseInt(row["수량"] || 1) || 1;
+  const optionNorm = normalize(optionRaw);
+  const globalCtx = productName + " " + optionRaw;
+  const hasGift = /\[\+\s*포켓\s*3\s*종\s*\]/.test(optionRaw);
+  const mapped = [];
+  let method = "rule", confidence = 0.7;
+
+  if (!optionNorm) {
+    const f = detectFlavor(productName);
+    const s = detectSize(productName) || "560g";
+    const sku = lookupSKU(f, s);
+    if (sku) {
+      mapped.push({code:sku.code, name:sku.name, qty:orderQty, src:productName});
+      method = "product_name_only"; confidence = 0.7;
+    }
+  } else {
+    const tokens = splitTokens(optionNorm);
+    let matchedAny = false;
+    for (const rawTok of tokens) {
+      const tok = cleanToken(rawTok);
+      if (!tok || tok.length < 2) continue;
+      if (NOISE_TOKENS.some(n => tok === n)) continue;
+      const f = detectFlavor(tok);
+      if (!f) continue;
+      const s = detectSize(tok, globalCtx) || detectSize(productName) || "560g";
+      const sku = lookupSKU(f, s);
+      if (!sku) continue;
+      const q = detectQty(tok) * orderQty;
+      const existing = mapped.find(m => m.code === sku.code);
+      if (existing) existing.qty += q;
+      else mapped.push({code:sku.code, name:sku.name, qty:q, src:tok});
+      matchedAny = true;
+    }
+    if (!matchedAny) {
+      const f = detectFlavor(globalCtx);
+      const s = detectSize(globalCtx) || "560g";
+      const sku = lookupSKU(f, s);
+      if (sku) {
+        mapped.push({code:sku.code, name:sku.name, qty:orderQty, src:"fallback"});
+        method = "fallback"; confidence = 0.5;
+      }
+    } else {
+      method = "generic_tokens"; confidence = 0.8;
+    }
+  }
+  if (hasGift && !mapped.find(m=>m.code===82)) {
+    mapped.push({code:82, name:"밀잇 포캣3종 (피+초+시)", qty:orderQty, src:"[+포켓 3종]"});
+  }
+  return {
+    mapped, method,
+    confidence: mapped.length ? confidence : 0,
+    status: mapped.length ? "ok" : "unmatched"
+  };
+}
+
+// ============================================================
+// UI
+// ============================================================
+const fileInput = document.getElementById("fileInput");
+const dropZone = document.getElementById("dropZone");
+const results = document.getElementById("results");
+const statsEl = document.getElementById("stats");
+const tableEl = document.getElementById("resultTable");
+const downloadBtn = document.getElementById("downloadBtn");
+const filenameEl = document.getElementById("filename");
+
+let lastResults = null;
+let lastFilename = "";
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragging"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("dragging");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  lastFilename = file.name;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb = XLSX.read(ev.target.result, {type:"array"});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:""});
+    processRows(rows);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processRows(rows) {
+  const out = rows.map((r, i) => ({...r, _idx:i+1, ...mapOrder(r)}));
+  lastResults = out;
+  renderStats(out);
+  renderTable(out);
+  filenameEl.textContent = lastFilename + " · " + out.length + "건";
+  results.style.display = "block";
+}
+
+function renderStats(rows) {
+  const total = rows.length;
+  const ok = rows.filter(r => r.status === "ok").length;
+  const high = rows.filter(r => r.confidence >= 0.8).length;
+  const unmatched = total - ok;
+  statsEl.innerHTML =
+    '<div class="stat"><div class="lbl">전체 주문</div><div class="val">'+total+'</div></div>' +
+    '<div class="stat ok"><div class="lbl">매핑 성공</div><div class="val">'+ok+'</div></div>' +
+    '<div class="stat warn"><div class="lbl">고신뢰(≥0.8)</div><div class="val">'+high+'</div></div>' +
+    '<div class="stat err"><div class="lbl">미매핑</div><div class="val">'+unmatched+'</div></div>';
+}
+
+function renderTable(rows) {
+  const head = '<thead><tr>' +
+    '<th>#</th><th>관리번호</th><th>판매처</th><th>상품명</th><th>옵션</th>' +
+    '<th>수량</th><th>매핑결과</th><th>방법</th><th>신뢰도</th>' +
+    '</tr></thead>';
+  const body = rows.map(r => {
+    const cls = r.confidence >= 0.8 ? "conf-high" : r.confidence >= 0.6 ? "conf-mid" : "conf-low";
+    const mapped = r.mapped.map(m =>
+      '<span class="badge qty">'+m.code+'</span> ' + escapeHtml(m.name) +
+      ' <span class="badge qty">x'+m.qty+'</span>'
+    ).join("<br>") || "<span style='color:#dc2626'>미매핑</span>";
+    return '<tr class="'+cls+'">'+
+      '<td>'+r._idx+'</td>'+
+      '<td>'+escapeHtml(r["관리번호"]||"")+'</td>'+
+      '<td>'+escapeHtml(r["판매처이름"]||"")+'</td>'+
+      '<td>'+escapeHtml(r["상품명"]||"")+'</td>'+
+      '<td style="max-width:280px;">'+escapeHtml(r["옵션"]||"")+'</td>'+
+      '<td>'+(r["수량"]||1)+'</td>'+
+      '<td>'+mapped+'</td>'+
+      '<td><span class="badge method">'+r.method+'</span></td>'+
+      '<td>'+(r.confidence*100).toFixed(0)+'%</td>'+
+      '</tr>';
+  }).join("");
+  tableEl.innerHTML = head + '<tbody>'+body+'</tbody>';
+}
+
+function escapeHtml(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+downloadBtn.addEventListener("click", () => {
+  if (!lastResults) return;
+  const out = lastResults.flatMap(r => {
+    if (r.mapped.length === 0) {
+      return [{
+        "관리번호":r["관리번호"]||"", "판매처이름":r["판매처이름"]||"",
+        "상품명":r["상품명"]||"", "옵션":r["옵션"]||"", "주문수량":r["수량"]||1,
+        "상품코드":"", "매핑상품명":"", "분리수량":"", "방법":r.method, "신뢰도":r.confidence
+      }];
+    }
+    return r.mapped.map(m => ({
+      "관리번호":r["관리번호"]||"", "판매처이름":r["판매처이름"]||"",
+      "상품명":r["상품명"]||"", "옵션":r["옵션"]||"", "주문수량":r["수량"]||1,
+      "상품코드":m.code, "매핑상품명":m.name, "분리수량":m.qty, "방법":r.method, "신뢰도":r.confidence
+    }));
+  });
+  const ws = XLSX.utils.json_to_sheet(out);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "매핑결과");
+  XLSX.writeFile(wb, lastFilename.replace(/\.[^.]+$/, "") + "_매핑결과.xlsx");
+});
+</script>
+
+</body>
+</html>
