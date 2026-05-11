@@ -167,7 +167,16 @@ const FLAVOR_ALIASES = {
 
 const sortedAliases = Object.keys(FLAVOR_ALIASES).sort((a,b)=>b.length-a.length);
 const FLAVOR_RE = new RegExp("(" + sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "i");
+const FLAVOR_RE_GLOBAL = new RegExp(sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|"), "gi");
+// 노이즈 토큰: 옵션 텍스트에서 제거하거나 분리자로 처리할 키워드
 const NOISE_TOKENS = ["NEW","UPGRADE","BEST","HOT","리뉴얼","[+포켓 3종]","선택안함","필요없음","없음","해당없음"];
+// 맛 이름 앞/뒤에 띄어쓰기 없이 붙는 경우 처리할 노이즈 prefix
+const NOISE_PREFIX_RE = /(NEW|UPGRADE|BEST|HOT|리뉴얼)/gi;
+// 쿠앤크 별칭(스타터팩 [] 안의 짧은 표기) 매핑
+const SHORT_FLAVOR_MAP = {
+  "초코":"초콜릿","쿠앤크":"쿠키앤크림","말차":"말차초코쿠키","미숫":"미숫가루",
+  "흑임자":"흑임자","시리얼":"시리얼","피스타":"피스타치오","바나나":"바나나","멜론":"멜론","커피":"커피"
+};
 
 function normalize(text) {
   if (!text) return "";
@@ -175,6 +184,8 @@ function normalize(text) {
   s = s.replace(/<상품명>[\s\S]*?(?=<옵션|<추가|$)/g, "");
   s = s.replace(/<옵션정보>/g, "").replace(/<옵션>/g, "").replace(/<추가옵션>/g, " | ");
   s = s.replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
+  // 노이즈 prefix가 맛 이름에 붙어있으면 공백 삽입 ("...2900원)NEW 쿠키앤크림" → "...2900원) NEW 쿠키앤크림")
+  s = s.replace(/([)\d원%])(NEW|UPGRADE|BEST|HOT|리뉴얼)/gi, "$1 $2 ");
   return s;
 }
 function detectFlavor(text) {
@@ -196,9 +207,13 @@ function detectSize(text, globalContext) {
   return null;
 }
 function detectQty(text) {
-  const m = String(text||"").match(/(\d+)\s*개/);
+  const s = String(text||"");
+  // "초코(2)" 형식 우선 처리 - 괄호 안 숫자
+  const paren = s.match(/\(\s*(\d+)\s*\)/);
+  if (paren) return parseInt(paren[1]);
+  const m = s.match(/(\d+)\s*(개|통|팩|봉)/);
   if (m) return parseInt(m[1]);
-  const m2 = String(text||"").match(/[xX×*]\s*(\d+)/);
+  const m2 = s.match(/[xX×*]\s*(\d+)/);
   return m2 ? parseInt(m2[1]) : 1;
 }
 function lookupSKU(flavor, size) {
@@ -208,7 +223,9 @@ function lookupSKU(flavor, size) {
 }
 function splitTokens(text) {
   let parts = [text];
-  [/\s*\|\s*/g, /\s*,\s*/g, /\s*\/\s*/g, /\s*;\s*/g, /\s*\+\s*/g].forEach(re => {
+  // 분리자에 노이즈 prefix(NEW, UPGRADE 등)도 포함
+  [/\s*\|\s*/g, /\s*,\s*/g, /\s*\/\s*/g, /\s*;\s*/g, /\s*\+\s*/g,
+   /\s+NEW\s+/gi, /\s+UPGRADE\s+/gi, /\s+BEST\s+/gi, /\s+HOT\s+/gi, /\s+리뉴얼\s+/g].forEach(re => {
     parts = parts.flatMap(p => p.split(re));
   });
   return parts.map(s=>s.trim()).filter(Boolean);
@@ -221,6 +238,48 @@ function cleanToken(tok) {
   return s;
 }
 
+// 스타터팩 [초코(2) 말차(1) ...] 패턴 파싱
+function parseStarterPackBracket(text, baseSize, orderQty) {
+  const bracket = text.match(/\[([^\]]+)\]/);
+  if (!bracket) return null;
+  const inner = bracket[1];
+  // "초코(2) 말차(1) 쿠앤크(1)..." 형식 추출
+  const re = /(초코|쿠앤크|말차|미숫|흑임자|시리얼|피스타|바나나|멜론|커피|초콜릿|쿠키앤크림|말차초코쿠키|미숫가루|피스타치오)\s*\(?\s*(\d+)\s*\)?/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(inner)) !== null) {
+    const flavor = SHORT_FLAVOR_MAP[m[1]] || FLAVOR_ALIASES[m[1]] || m[1];
+    const qty = parseInt(m[2]) * orderQty;
+    const sku = lookupSKU(flavor, baseSize);
+    if (sku) found.push({code:sku.code, name:sku.name, qty:qty, src:m[0]});
+  }
+  return found.length ? found : null;
+}
+
+// 상품명에 직접 "맛 N통/개" 정보가 있는 경우 추출
+// 예: "미숫가루맛 1통+흑임자맛 1통", "초코바나나맛 2통"
+function parseInlineFlavors(text, baseSize, orderQty) {
+  if (!text) return null;
+  const found = [];
+  const re = new RegExp("(" + sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")(?:맛)?\\s*(\\d+)?\\s*(?:통|개|팩|봉|포)?", "gi");
+  let m;
+  const seen = new Set();
+  while ((m = re.exec(text)) !== null) {
+    const flavor = FLAVOR_ALIASES[m[1].toLowerCase()] || FLAVOR_ALIASES[m[1]];
+    if (!flavor || flavor === "보틀" || flavor === "스타터팩") continue;
+    const qty = (m[2] ? parseInt(m[2]) : 1) * orderQty;
+    const key = flavor;
+    if (seen.has(key)) {
+      const ex = found.find(f => f.flavor === flavor);
+      if (ex) { ex.qty += qty; continue; }
+    }
+    seen.add(key);
+    const sku = lookupSKU(flavor, baseSize);
+    if (sku) found.push({code:sku.code, name:sku.name, qty:qty, flavor, src:m[0]});
+  }
+  return found.length ? found : null;
+}
+
 function mapOrder(row) {
   const productName = row["상품명"] || "";
   const optionRaw = row["옵션"] || "";
@@ -228,49 +287,73 @@ function mapOrder(row) {
   const optionNorm = normalize(optionRaw);
   const globalCtx = productName + " " + optionRaw;
   const hasGift = /\[\+\s*포켓\s*3\s*종\s*\]/.test(optionRaw);
+  // 보틀 사은품 자동 감지 (옵션이나 상품명에 "보틀 증정" 등의 키워드)
+  const hasBottleGift = /(보틀\s*\d*\s*ml\s*\d*개?\s*증정|트라이탄.*증정|쉐이커.*증정)/.test(globalCtx);
   const mapped = [];
   let method = "rule", confidence = 0.7;
 
-  if (!optionNorm) {
-    const f = detectFlavor(productName);
-    const s = detectSize(productName) || "560g";
-    const sku = lookupSKU(f, s);
-    if (sku) {
-      mapped.push({code:sku.code, name:sku.name, qty:orderQty, src:productName});
-      method = "product_name_only"; confidence = 0.7;
-    }
-  } else {
-    const tokens = splitTokens(optionNorm);
-    let matchedAny = false;
-    for (const rawTok of tokens) {
-      const tok = cleanToken(rawTok);
-      if (!tok || tok.length < 2) continue;
-      if (NOISE_TOKENS.some(n => tok === n)) continue;
-      const f = detectFlavor(tok);
-      if (!f) continue;
-      const s = detectSize(tok, globalCtx) || detectSize(productName) || "560g";
-      const sku = lookupSKU(f, s);
-      if (!sku) continue;
-      const q = detectQty(tok) * orderQty;
-      const existing = mapped.find(m => m.code === sku.code);
-      if (existing) existing.qty += q;
-      else mapped.push({code:sku.code, name:sku.name, qty:q, src:tok});
-      matchedAny = true;
-    }
-    if (!matchedAny) {
-      const f = detectFlavor(globalCtx);
-      const s = detectSize(globalCtx) || "560g";
-      const sku = lookupSKU(f, s);
-      if (sku) {
-        mapped.push({code:sku.code, name:sku.name, qty:orderQty, src:"fallback"});
-        method = "fallback"; confidence = 0.5;
+  // 1) 스타터팩 [세부맛] 패턴 우선 처리
+  const starterMatch = parseStarterPackBracket(globalCtx, detectSize(globalCtx) || "40g", orderQty);
+  if (starterMatch) {
+    starterMatch.forEach(s => mapped.push(s));
+    method = "starter_bracket"; confidence = 0.85;
+  }
+
+  if (mapped.length === 0) {
+    if (!optionNorm || /^선택안함$|^필요없음$|^없음$/.test(optionNorm.trim())) {
+      // 옵션 없음: 상품명 기반 추출 (맛 1개 또는 여러개)
+      const baseSize = detectSize(productName) || "560g";
+      const inline = parseInlineFlavors(productName, baseSize, orderQty);
+      if (inline && inline.length > 0) {
+        inline.forEach(i => mapped.push({code:i.code, name:i.name, qty:i.qty, src:i.src}));
+        method = inline.length > 1 ? "product_name_multi" : "product_name_only";
+        confidence = inline.length > 1 ? 0.8 : 0.75;
       }
     } else {
-      method = "generic_tokens"; confidence = 0.8;
+      const tokens = splitTokens(optionNorm);
+      let matchedAny = false;
+      for (const rawTok of tokens) {
+        const tok = cleanToken(rawTok);
+        if (!tok || tok.length < 2) continue;
+        if (NOISE_TOKENS.some(n => tok === n)) continue;
+        const f = detectFlavor(tok);
+        if (!f) continue;
+        const s = detectSize(tok, globalCtx) || detectSize(productName) || "560g";
+        const sku = lookupSKU(f, s);
+        if (!sku) continue;
+        const q = detectQty(tok) * orderQty;
+        const existing = mapped.find(m => m.code === sku.code);
+        if (existing) existing.qty += q;
+        else mapped.push({code:sku.code, name:sku.name, qty:q, src:tok});
+        matchedAny = true;
+      }
+      if (!matchedAny) {
+        // fallback: 옵션 전체에서 맛 패턴 다중 추출
+        const baseSize = detectSize(globalCtx) || "560g";
+        const inline = parseInlineFlavors(optionNorm, baseSize, orderQty);
+        if (inline && inline.length > 0) {
+          inline.forEach(i => mapped.push({code:i.code, name:i.name, qty:i.qty, src:i.src}));
+          method = "fallback_inline"; confidence = 0.7;
+        } else {
+          const f = detectFlavor(globalCtx);
+          const s = detectSize(globalCtx) || "560g";
+          const sku = lookupSKU(f, s);
+          if (sku) {
+            mapped.push({code:sku.code, name:sku.name, qty:orderQty, src:"fallback"});
+            method = "fallback"; confidence = 0.5;
+          }
+        }
+      } else {
+        method = "generic_tokens"; confidence = 0.8;
+      }
     }
   }
+
   if (hasGift && !mapped.find(m=>m.code===82)) {
     mapped.push({code:82, name:"밀잇 포캣3종 (피+초+시)", qty:orderQty, src:"[+포켓 3종]"});
+  }
+  if (hasBottleGift && !mapped.find(m=>m.code===35)) {
+    mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:orderQty, src:"보틀 증정"});
   }
   return {
     mapped, method,
@@ -366,39 +449,59 @@ function escapeHtml(s) {
   return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+function padCode(code) {
+  if (code === "" || code === null || code === undefined) return "";
+  return String(code).padStart(5, "0");
+}
+
 downloadBtn.addEventListener("click", () => {
   if (!lastResults) return;
-  const rows = lastResults.flatMap(r => {
-    if (r.mapped.length === 0) {
-      return [{
-        "_orderKey": r["관리번호"] || r["판매처이름"] || String(r._idx),
-        "판매처명": r["판매처이름"] || "",
-        "판매처 상품코드": r["관리번호"] || "",
-        "판매처 옵션": r["옵션"] || "",
-        "상품코드": "",
-        "수량": "",
-        "판매처 상품명": r["상품명"] || ""
-      }];
-    }
-    return r.mapped.map(m => ({
-      "_orderKey": r["관리번호"] || r["판매처이름"] || String(r._idx),
-      "판매처명": r["판매처이름"] || "",
-      "판매처 상품코드": r["관리번호"] || "",
-      "판매처 옵션": r["옵션"] || "",
-      "상품코드": m.code,
-      "수량": m.qty,
-      "판매처 상품명": r["상품명"] || ""
-    }));
+  // 1) 주문별로 행 생성 (mapped별 한 행씩, 미매핑은 빈 매핑 1행)
+  const groups = lastResults.map(r => {
+    const orderKey = r["관리번호"] || r["판매처이름"] || String(r._idx);
+    const sellerName = r["판매처이름"] || "";
+    const sellerCode = r["관리번호"] || "";
+    const sellerOption = r["옵션"] || "";
+    const sellerProductName = r["상품명"] || "";
+    const items = r.mapped.length === 0
+      ? [{ code: "", qty: "" }]
+      : r.mapped.map(m => ({ code: padCode(m.code), qty: m.qty }));
+    return { orderKey, sellerName, sellerCode, sellerOption, sellerProductName, items };
   });
 
-  // 같은 주문번호(판매처 상품코드) 기준으로 정렬하여 묶기
-  rows.sort((a, b) => {
-    if (a._orderKey < b._orderKey) return -1;
-    if (a._orderKey > b._orderKey) return 1;
+  // 2) 같은 주문번호(판매처 상품코드) 기준으로 정렬
+  groups.sort((a, b) => {
+    if (a.orderKey < b.orderKey) return -1;
+    if (a.orderKey > b.orderKey) return 1;
     return 0;
   });
 
-  const out = rows.map(({ _orderKey, ...rest }) => rest);
+  // 3) 같은 주문 첫 행만 판매처 정보, 이후 행은 빈 셀 (병합 표시)
+  const out = [];
+  groups.forEach(g => {
+    g.items.forEach((it, idx) => {
+      if (idx === 0) {
+        out.push({
+          "판매처명": g.sellerName,
+          "판매처 상품코드": g.sellerCode,
+          "판매처 옵션": g.sellerOption,
+          "상품코드": it.code,
+          "수량": it.qty,
+          "판매처 상품명": g.sellerProductName
+        });
+      } else {
+        out.push({
+          "판매처명": "",
+          "판매처 상품코드": "",
+          "판매처 옵션": "",
+          "상품코드": it.code,
+          "수량": it.qty,
+          "판매처 상품명": ""
+        });
+      }
+    });
+  });
+
   const ws = XLSX.utils.json_to_sheet(out, {
     header: ["판매처명", "판매처 상품코드", "판매처 옵션", "상품코드", "수량", "판매처 상품명"]
   });
