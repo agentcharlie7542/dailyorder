@@ -70,6 +70,18 @@ tr:hover td{background:#fafbff}
 .rule-list{border:1px solid var(--bdr);border-radius:7px;max-height:280px;overflow-y:auto;background:#fff}
 .empty{padding:20px;text-align:center;color:var(--m);font-size:12px}
 code{background:#eef2ff;color:#4338ca;padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px}
+.edit-mode td.editable{background:#fefce8;cursor:text;outline:1px dashed #facc15}
+.edit-mode td.editable:focus{outline:2px solid var(--y);background:#fef9c3}
+td.edited{background:#fef3c7!important;font-weight:600}
+.edit-mode tr td.del-cell{cursor:pointer}
+.del-btn{background:none;border:none;color:var(--r);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;display:none}
+.edit-mode .del-btn{display:inline-block}
+.del-btn:hover{background:#fee2e2}
+.add-row-btn{background:none;border:1px dashed var(--g);color:var(--g);cursor:pointer;font-size:11px;padding:3px 10px;border-radius:4px;display:none}
+.edit-mode .add-row-btn{display:inline-block}
+.add-row-btn:hover{background:#d1fae5}
+tr.group-edited td{background:#fefce8}
+tr.group-edited:hover td{background:#fef9c3}
 </style>
 </head>
 <body>
@@ -111,8 +123,14 @@ code{background:#eef2ff;color:#4338ca;padding:1px 5px;border-radius:3px;font-fam
 <div class="acts"><button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button></div>
 </div></div>
 
-<div class="box hidden" id="ps"><div class="box-h"><span>🔍 결과 미리보기</span><div style="display:flex;gap:6px"><button class="btn btn-o" style="padding:5px 10px;font-size:10px" onclick="tv('m')">✅ 매핑</button><button class="btn btn-o" style="padding:5px 10px;font-size:10px" onclick="tv('u')">❌ 미매핑</button></div></div><div class="box-b">
-<div id="mv"><div class="tw"><table><thead><tr><th>판매처명</th><th>판매처 상품코드</th><th>판매처 상품명</th><th>판매처 옵션</th><th>상품코드</th><th>상품명</th><th>수량</th><th>관리번호</th><th>매칭방식</th></tr></thead><tbody id="mt"></tbody></table></div></div>
+<div class="box hidden" id="ps"><div class="box-h"><span>🔍 결과 미리보기</span><div style="display:flex;gap:6px;align-items:center">
+  <button class="btn btn-o" id="editToggleBtn" style="padding:5px 10px;font-size:10px" onclick="toggleEdit()">✏️ 편집 모드</button>
+  <button class="btn btn-g" id="saveRulesBtn" style="padding:5px 12px;font-size:10px;display:none" onclick="saveEditsAsRules()">💾 변경사항 → 룰로 저장 (<span id="editCount">0</span>건)</button>
+  <span style="width:1px;height:18px;background:var(--bdr);margin:0 4px"></span>
+  <button class="btn btn-o" style="padding:5px 10px;font-size:10px" onclick="tv('m')">✅ 매핑</button>
+  <button class="btn btn-o" style="padding:5px 10px;font-size:10px" onclick="tv('u')">❌ 미매핑</button>
+</div></div><div class="box-b">
+<div id="mv"><div class="tw"><table><thead><tr><th style="width:30px"></th><th>판매처명</th><th>판매처 상품코드</th><th>판매처 상품명</th><th>판매처 옵션</th><th>상품코드</th><th>상품명</th><th>수량</th><th>관리번호</th><th>매칭방식</th><th style="width:50px"></th></tr></thead><tbody id="mt"></tbody></table></div></div>
 <div id="uv" class="hidden"><div class="tw"><table><thead><tr><th>관리번호</th><th>판매처</th><th>상품코드</th><th>상품명</th><th>옵션</th><th>수량</th><th>사유</th><th>+ 학습</th></tr></thead><tbody id="ut"></tbody></table></div></div>
 </div></div>
 
@@ -388,14 +406,164 @@ function run(){
   renderM();renderU();
 }
 
+let editMode=false;
+function toggleEdit(){
+  editMode=!editMode;
+  const mv=document.getElementById('mv');
+  mv.classList.toggle('edit-mode',editMode);
+  const btn=document.getElementById('editToggleBtn');
+  btn.textContent=editMode?'✓ 편집 종료':'✏️ 편집 모드';
+  btn.classList.toggle('btn-y',editMode);
+  btn.classList.toggle('btn-o',!editMode);
+  renderM();
+}
+function markGroupEdited(mg){
+  MR.forEach(r=>{if(r.mg===mg||(!r.mg&&r._groupKey===mg))r._edited=true});
+  updateEditCount();
+  renderM();
+}
+function updateEditCount(){
+  const groups=new Set();
+  MR.forEach(r=>{if(r._edited)groups.add(r._groupKey||r.mg)});
+  const c=groups.size;
+  document.getElementById('editCount').textContent=c;
+  document.getElementById('saveRulesBtn').style.display=c>0?'inline-flex':'none';
+}
 function renderM(){
   const tb=document.getElementById('mt');tb.innerHTML='';
-  MR.slice(0,500).forEach(r=>{
+  // 그룹키 부여 (관리번호 없으면 첫행 인덱스 사용)
+  let curGroup=null;
+  MR.forEach((r,i)=>{
+    if(r._m){curGroup=r.mg||('_idx_'+i)}
+    r._groupKey=curGroup;
+  });
+  MR.slice(0,500).forEach((r,idx)=>{
     const tr=document.createElement('tr');
-    if(r._m)tr.className='rm';
-    [r.v,r.pc,r.pn,r.opt,r.sc,r.sn,r.q,r.mg,r.mt].forEach(v=>{const td=document.createElement('td');td.textContent=v||'';td.title=v||'';tr.appendChild(td)});
+    if(r._m)tr.classList.add('rm');
+    if(r._edited)tr.classList.add('group-edited');
+
+    // 그룹 식별 표시 (첫 행에 + 버튼)
+    const tdMark=document.createElement('td');
+    tdMark.style.textAlign='center';tdMark.style.color='var(--m)';tdMark.style.fontSize='10px';
+    if(r._m){
+      const addBtn=document.createElement('button');
+      addBtn.className='add-row-btn';
+      addBtn.textContent='+';
+      addBtn.title='이 주문에 상품 추가';
+      addBtn.onclick=()=>addRowToGroup(r._groupKey);
+      tdMark.appendChild(addBtn);
+    }
+    tr.appendChild(tdMark);
+
+    [['v',r.v,false],['pc',r.pc,false],['pn',r.pn,false],['opt',r.opt,false],
+     ['sc',r.sc,true],['sn',r.sn,false],['q',r.q,true],
+     ['mg',r.mg,false],['mt',r.mt,false]].forEach(([field,val,editable])=>{
+      const td=document.createElement('td');
+      td.textContent=val||'';td.title=val||'';
+      if(editable){
+        td.classList.add('editable');
+        td.dataset.field=field;
+        td.dataset.idx=idx;
+        td.contentEditable='true';
+        if(r['_orig_'+field]!==undefined && String(r['_orig_'+field])!==String(val)){
+          td.classList.add('edited');
+        }
+        td.addEventListener('focus',()=>{if(r['_orig_'+field]===undefined)r['_orig_'+field]=r[field]});
+        td.addEventListener('blur',e=>{
+          let newVal=e.target.textContent.trim();
+          if(field==='sc'){newVal=padCode(newVal);e.target.textContent=newVal;r.sn=SKU_CATALOG_ALL[newVal]||r.sn;}
+          if(field==='q'){newVal=parseInt(newVal)||1;e.target.textContent=newVal;}
+          if(String(r[field])!==String(newVal)){
+            r[field]=newVal;
+            r._edited=true;
+            markGroupEdited(r._groupKey);
+          }
+          // 상품명 셀 즉시 갱신
+          if(field==='sc'){
+            const snCell=tr.querySelector('td[data-field="sn"]');
+            if(!snCell){
+              // sn은 editable이 아니라서 dataset이 없음. 인덱스로 찾기
+              const cells=tr.querySelectorAll('td');
+              cells[6].textContent=r.sn||'';
+            }
+          }
+        });
+        td.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur()}});
+      }
+      tr.appendChild(td);
+    });
+
+    // 삭제 버튼
+    const tdDel=document.createElement('td');
+    tdDel.style.textAlign='center';
+    const delBtn=document.createElement('button');
+    delBtn.className='del-btn';
+    delBtn.textContent='×';
+    delBtn.title='이 행 삭제';
+    delBtn.onclick=()=>{
+      const groupKey=r._groupKey;
+      const groupRows=MR.filter(x=>x._groupKey===groupKey);
+      if(groupRows.length<=1){alert('주문의 마지막 상품은 삭제할 수 없습니다.');return}
+      const realIdx=MR.indexOf(r);
+      if(realIdx>=0){
+        // 첫 행이었으면 다음 행에 _m 이관
+        if(r._m){
+          const next=MR.find((x,j)=>j>realIdx&&x._groupKey===groupKey);
+          if(next){next._m=true;next.v=r.v;next.pc=r.pc;next.pn=r.pn;next.opt=r.opt;next.mg=r.mg;next.mt=r.mt}
+        }
+        MR.splice(realIdx,1);
+        markGroupEdited(groupKey);
+      }
+    };
+    tdDel.appendChild(delBtn);
+    tr.appendChild(tdDel);
+
     tb.appendChild(tr);
   });
+}
+function addRowToGroup(groupKey){
+  const groupRows=MR.filter(r=>r._groupKey===groupKey);
+  if(groupRows.length===0)return;
+  const first=groupRows[0];
+  const lastIdx=MR.indexOf(groupRows[groupRows.length-1]);
+  const newRow={v:'',pc:'',pn:'',opt:'',sc:'',sn:'',q:1,mg:'',mt:'편집추가',_m:false,_edited:true,_groupKey:groupKey};
+  MR.splice(lastIdx+1,0,newRow);
+  markGroupEdited(groupKey);
+}
+function saveEditsAsRules(){
+  // _edited 그룹별로 룰 생성
+  const groupMap=new Map();
+  MR.forEach(r=>{if(r._edited){const k=r._groupKey;if(!groupMap.has(k))groupMap.set(k,[]);groupMap.get(k).push(r)}});
+  if(groupMap.size===0){alert('변경된 항목이 없습니다.');return}
+
+  const existing=loadRules();
+  let added=0;
+  groupMap.forEach((rows,key)=>{
+    // 첫행 정보 찾기
+    const first=rows.find(r=>r._m)||rows[0];
+    // 첫행이 _m이 아닐 수 있으니 같은 그룹의 _m 찾기
+    const groupAll=MR.filter(r=>r._groupKey===key);
+    const head=groupAll.find(r=>r._m)||groupAll[0];
+    if(!head)return;
+    const pattern=String(head.opt||head.pn||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    if(!pattern)return;
+    const results=groupAll.filter(r=>r.sc).map(r=>({code:parseInt(r.sc),qty:parseInt(r.q)||1}));
+    if(results.length===0)return;
+    existing.push({
+      pattern,target:'option',results,
+      note:`편집 저장 #${head.mg||key} (${head.v}/${head.pc})`,
+      createdAt:new Date().toISOString()
+    });
+    added++;
+    // 편집 플래그 해제
+    groupAll.forEach(r=>{r._edited=false;Object.keys(r).filter(k=>k.startsWith('_orig_')).forEach(k=>delete r[k])});
+  });
+  saveRules(existing);
+  renderRules();
+  updateEditCount();
+  renderM();
+  alert(`✓ ${added}개 그룹이 학습규칙으로 저장되었습니다.\n다음 매핑부터 자동 적용됩니다.`);
+  log(`편집 저장: ${added}개 학습규칙 추가`,'c');
 }
 function renderU(){
   const tb=document.getElementById('ut');tb.innerHTML='';
