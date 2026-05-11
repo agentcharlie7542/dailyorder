@@ -3,971 +3,469 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MealIt 옵션 자동분류 데모</title>
+<title>밀잇 주문 매핑 v2 — 옵션파싱 + 학습규칙</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo",
-                 "Malgun Gothic", "맑은 고딕", sans-serif;
-    max-width: 1280px; margin: 0 auto; padding: 24px; color: #1f2937;
-    background: #ffffff;
-  }
-  h1 { font-size: 22px; margin: 0 0 6px; }
-  p.sub { color: #6b7280; margin: 0 0 24px; font-size: 14px; }
-
-  /* 업로드 영역 — input을 시각적으로 숨기되 클릭 가능하게 유지 */
-  .upload {
-    display: block; width: 100%;
-    border: 2px dashed #cbd5e1; border-radius: 12px;
-    padding: 32px 24px;
-    text-align: center; background: #f8fafc; cursor: pointer;
-    transition: background .15s, border-color .15s;
-    position: relative;
-  }
-  .upload:hover { border-color: #6366f1; background: #eef2ff; }
-  .upload.dragging { border-color: #6366f1; background: #eef2ff; }
-  .upload .visually-hidden {
-    position: absolute !important;
-    width: 1px !important; height: 1px !important;
-    padding: 0 !important; margin: -1px !important;
-    overflow: hidden !important; clip: rect(0,0,0,0) !important;
-    white-space: nowrap !important; border: 0 !important;
-  }
-  .upload-icon { font-size: 32px; line-height: 1; margin-bottom: 8px; }
-  .upload-title { font-weight: 600; font-size: 15px; }
-  .upload-hint { color: #6b7280; font-size: 13px; margin-top: 4px; }
-
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
-  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
-  .stat { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
-  .stat .lbl { font-size: 12px; color: #6b7280; }
-  .stat .val { font-size: 22px; font-weight: 700; margin-top: 4px; }
-  .stat.ok .val { color: #059669; }
-  .stat.warn .val { color: #d97706; }
-  .stat.err .val { color: #dc2626; }
-
-  .toolbar { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; }
-  .table-wrap { overflow: auto; max-height: 65vh; margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
-  th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
-  th { background: #f9fafb; font-weight: 600; position: sticky; top: 0; z-index: 1; border-bottom: 1px solid #e5e7eb; }
-  tr.conf-high td { background: #f0fdf4; }
-  tr.conf-mid  td { background: #fffbeb; }
-  tr.conf-low  td { background: #fef2f2; }
-
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .badge.method { background: #e0e7ff; color: #3730a3; }
-  .badge.qty { background: #dbeafe; color: #1e40af; }
-  button { background: #4f46e5; color: #fff; border: none; padding: 9px 18px; border-radius: 8px;
-           cursor: pointer; font-weight: 600; font-size: 14px; }
-  button:hover { background: #4338ca; }
-  button:disabled { background: #cbd5e1; cursor: not-allowed; }
-
-  .note { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px;
-          margin: 16px 0 0; border-radius: 4px; font-size: 13px; }
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0d0f14;--s:#161920;--s2:#1e2230;--bdr:#2a2f3d;--a:#4f8ef7;--a2:#7c5cfc;--g:#22d3a0;--r:#f75c5c;--y:#f7b84f;--t:#e8ecf4;--m:#6b7794;--mono:'JetBrains Mono',monospace;--sans:'Noto Sans KR',sans-serif}
+body{font-family:var(--sans);background:var(--bg);color:var(--t);min-height:100vh;line-height:1.5}
+.hdr{background:linear-gradient(135deg,#1a1f2e,#161920);border-bottom:1px solid var(--bdr);padding:16px 28px;display:flex;align-items:center;gap:14px}
+.hdr img{height:34px;width:auto}
+.hdr h1{font-size:16px;font-weight:700}.hdr p{font-size:11px;color:var(--m);margin-top:1px}
+.c{max-width:1400px;margin:0 auto;padding:20px 28px}
+.box{background:var(--s);border:1px solid var(--bdr);border-radius:10px;margin-bottom:20px;overflow:hidden}
+.box-h{padding:14px 18px;border-bottom:1px solid var(--bdr);background:var(--s2);font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.box-b{padding:18px}
+.note{border-left:4px solid var(--y);padding:14px 18px;background:var(--s);border-radius:0 8px 8px 0;margin-bottom:16px;font-size:12px;color:#c8d0e0}
+.note b{color:var(--y)}
+.ugrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ucard{border:2px dashed var(--bdr);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:.2s}
+.ucard:hover{border-color:var(--a);background:rgba(79,142,247,.04)}
+.ucard.ok{border-color:var(--g);border-style:solid;background:rgba(34,211,160,.04)}
+.ucard input{display:none}
+.ucard .ic{font-size:24px;margin-bottom:6px}
+.ucard .lb{font-size:12px;font-weight:600;margin-bottom:3px}
+.ucard .sb{font-size:10px;color:var(--m)}
+.ucard .st{font-size:10px;color:var(--g);margin-top:6px;font-family:var(--mono)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:7px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-p{background:linear-gradient(135deg,var(--a),var(--a2));color:#fff}
+.btn-p:hover{opacity:.9}.btn-p:disabled{opacity:.3;cursor:not-allowed}
+.btn-g{background:var(--g);color:#0d0f14}.btn-g:disabled{opacity:.3;cursor:not-allowed}
+.btn-o{background:var(--s2);color:var(--t);border:1px solid var(--bdr)}.btn-o:hover{background:var(--bdr)}
+.btn-r{background:var(--r);color:#fff}
+.btn-y{background:var(--y);color:#0d0f14}
+.sg{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.sc{background:var(--s2);border:1px solid var(--bdr);border-radius:7px;padding:12px 14px}
+.sc .l{font-size:10px;color:var(--m);margin-bottom:3px}
+.sc .v{font-size:20px;font-weight:700;font-family:var(--mono)}
+.sc .v.g{color:var(--g)}.sc .v.r{color:var(--r)}.sc .v.y{color:var(--y)}.sc .v.b{color:var(--a)}.sc .v.p{color:var(--a2)}
+.tw{overflow-x:auto;margin-top:12px;max-height:500px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead{position:sticky;top:0;z-index:10}
+thead tr{background:var(--s2)}
+th{padding:8px 10px;text-align:left;font-weight:700;font-size:10px;color:var(--m);border-bottom:1px solid var(--bdr);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid rgba(42,47,61,.5);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:rgba(79,142,247,.04)}
+.rm{background:rgba(79,142,247,.05)}
+.log{background:#0a0c11;border:1px solid var(--bdr);border-radius:7px;padding:12px;font-family:var(--mono);font-size:10px;max-height:260px;overflow-y:auto;margin-top:12px}
+.log div{margin-bottom:2px}.log .ok{color:var(--g)}.log .w{color:var(--y)}.log .e{color:var(--r)}.log .i{color:var(--m)}.log .c{color:var(--a2)}
+.acts{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.hidden{display:none!important}
+.pb{height:3px;border-radius:2px;background:var(--bdr);margin:10px 0;overflow:hidden}
+.pf{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--a),var(--g));transition:width .3s}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:11px;color:var(--m);font-weight:600}
+.fld input,.fld select,.fld textarea{background:#0a0c11;border:1px solid var(--bdr);border-radius:6px;padding:8px 10px;color:var(--t);font-size:12px;font-family:var(--sans)}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--a)}
+.crow{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px}
+.rule-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(42,47,61,.5);font-size:12px}
+.rule-item:last-child{border-bottom:none}
+.rule-item .idx{flex:0 0 28px;font-weight:600;color:var(--m);font-family:var(--mono)}
+.rule-item .pat{flex:1;min-width:0}
+.rule-item .pat .p{font-weight:600;color:var(--t);word-break:break-all}
+.rule-item .pat .meta{font-size:10px;color:var(--m);margin-top:2px}
+.rule-item .pat .res{font-size:11px;color:var(--a);margin-top:3px;font-family:var(--mono)}
+.rule-list{border:1px solid var(--bdr);border-radius:7px;max-height:280px;overflow-y:auto;background:#0a0c11}
+.empty{padding:20px;text-align:center;color:var(--m);font-size:12px}
+code{background:rgba(124,92,252,.15);color:#a5b4fc;padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px}
 </style>
 </head>
 <body>
-
-<div style="display:flex; align-items:center; gap:14px; margin-bottom:8px;">
-  <img src="logo.png" alt="MEAL IT" style="height:44px; width:auto;">
-  <h1 style="margin:0; font-size:22px;">옵션 자동분류 데모</h1>
+<div class="hdr">
+  <img src="logo.png" alt="MEAL IT">
+  <div><h1>주문 매핑 v2 — 옵션파싱 + 학습규칙</h1><p>Rules 답안지 정확일치 → 옵션 키워드 파싱 → 사용자 학습규칙 자동 누적</p></div>
 </div>
-<p class="sub">엑셀 파일을 업로드하면 옵션 텍스트를 자동으로 분석하여 SKU 코드 + 수량으로 분리합니다. (브라우저 단독 동작 / 외부 전송 없음)</p>
-
-<label class="upload" id="dropZone" for="fileInput">
-  <input type="file" id="fileInput" accept=".xlsx,.xls" class="visually-hidden">
-  <div class="upload-icon">📂</div>
-  <div class="upload-title">엑셀 파일 선택 또는 드래그</div>
-  <div class="upload-hint">필수 컬럼: 판매처이름, 상품명, 옵션, 수량 (관리번호/상품코드 선택)</div>
-</label>
-
-<div id="results" style="display:none;">
-  <div class="stats" id="stats"></div>
-  <div class="toolbar">
-    <div style="font-size:13px; color:#6b7280;" id="filename"></div>
-    <button id="downloadBtn">📥 매핑결과 엑셀 다운로드</button>
-  </div>
-  <div class="table-wrap">
-    <table id="resultTable"></table>
-  </div>
-</div>
+<div class="c">
 
 <div class="note">
-  ⚙️ <b>고도화된 규칙 기반 매핑 엔진 v2</b> — 264개 주문 · 2,617행 답안지에서 추출한 9단계 매핑 파이프라인이 적용됩니다.
-  <ul style="margin:8px 0 0; padding-left:20px; line-height:1.8;">
-    <li><b>① 사용자 정의 규칙</b> 최우선 적용 (하단 박스, localStorage 저장)</li>
-    <li><b>② 단독특가 자동 SKU</b> — 트라이탄 보틀, 딸기 450g, 스타터팩 7종, 애사비 젤리</li>
-    <li><b>③ 스타터팩 SKU 인식</b> — 5/7/10개입 자동 분류</li>
-    <li><b>④ 스타터팩 괄호 분해</b> — <code>[초코(2) 말차(1) 쿠앤크(1)…]</code> 다종 분해</li>
-    <li><b>⑤ 카카오톡 21개입 분해</b> — <code>(바나나 7개 멜론 7개 …)</code> → 각 7개입 SKU</li>
-    <li><b>⑥ 카페24 추가옵션 토큰</b> — <code>NEW/UPGRADE/BEST</code> prefix 자동 제거, <code>[맛]맛 [사이즈] N개</code> 파싱</li>
-    <li><b>⑦ 지그재그 맛 선택 패턴</b> — <code>맛 선택1:X 1통, 맛 선택2:Y 1통</code> 분리</li>
-    <li><b>⑧ 옵션 빈 케이스</b> — 상품명에서 다중 맛 추출</li>
-    <li><b>⑨ 사은품 자동 추가</b> — <code>[보틀증정]</code>, <code>[+포켓 3종]</code> 키워드 감지</li>
-  </ul>
-  <div style="margin-top:10px; padding-top:10px; border-top:1px solid #fcd34d;">
-    📤 <b>출력 형식</b>: 시트명 <code>match_list</code> · 컬럼 <code>판매처명 / 판매처 상품코드 / 판매처 옵션 / 상품코드(5자리 zero-pad) / 수량 / 판매처 상품명 / 비고</code>
-    · 같은 관리번호는 첫 행만 판매처 정보, 이후 행은 상품코드+수량만 (병합형) · 미매핑은 <b>비고</b> 컬럼에 <b>★</b> 표시 · 원본 행 순서 그대로 유지
-  </div>
-  <div style="margin-top:8px; font-size:12px; color:#92400e;">
-    ⚠️ 신뢰도가 낮은 행은 노란/빨간 배경으로 표시됩니다. ★ 표시된 미매핑 케이스는 하단 박스에 패턴을 추가하면 즉시 재매핑되며 다음 주문부터 자동 적용됩니다.
-  </div>
+  <b>4단계 매칭 파이프라인:</b>
+  ① <b>사용자 학습규칙</b>(localStorage 저장 · 영구) →
+  ② <b>Rules 답안지 정확일치</b>(태그 제거 후 v+pc+opt 키 매칭) →
+  ③ <b>옵션 키워드 파싱</b>(맛+사이즈+수량 추출) →
+  ④ <b>미매핑(★)</b>은 하단 박스에서 패턴 등록 시 ①로 누적되어 다음 실행부터 자동 적용
 </div>
 
-<!-- ============================================================
-     사용자 정의 매핑 패턴 추가 박스
-     ============================================================ -->
-<div id="customRules" style="margin-top:32px; padding:20px; border:1px solid #e5e7eb; border-radius:12px; background:#fafafa;">
-  <h2 style="font-size:18px; margin:0 0 6px;">🧩 사용자 정의 매핑 패턴 추가</h2>
-  <p style="font-size:13px; color:#6b7280; margin:0 0 16px;">
-    미매핑(★)이거나 잘못 매핑된 케이스의 패턴을 추가하면 다음 매핑부터 자동 적용됩니다. (브라우저에 저장 · localStorage)
-  </p>
+<div class="box"><div class="box-h">📂 파일 업로드</div><div class="box-b">
+<div class="ugrid">
+<div class="ucard" id="rc" onclick="document.getElementById('rf').click()"><input type="file" id="rf" accept=".xlsx,.xls" onchange="loadR(this)"><div class="ic">📋</div><div class="lb">Rules 파일 (답안지)</div><div class="sb">rules_result_.xlsx</div><div class="st" id="rs"></div></div>
+<div class="ucard" id="oc" onclick="document.getElementById('of').click()"><input type="file" id="of" accept=".xlsx,.xls" onchange="loadO(this)"><div class="ic">🛒</div><div class="lb">주문건 파일</div><div class="sb">20260511주문건_.xlsx</div><div class="st" id="os"></div></div>
+</div>
+<div class="acts">
+<button class="btn btn-p" id="mb" onclick="run()" disabled>⚡ 매핑 실행</button>
+<button class="btn btn-o" onclick="clr()">🗑 초기화</button>
+</div>
+<div class="log" id="lg"><div class="i">// 대기 중</div></div>
+</div></div>
 
-  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
-    <div>
-      <label style="font-size:12px; font-weight:600; color:#374151;">매칭 패턴 (텍스트 일부 또는 정규식)</label>
-      <input id="cr_pattern" type="text" placeholder="예: 마스터 키트 5통+포켓 21개입"
-        style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; margin-top:4px;">
-    </div>
-    <div>
-      <label style="font-size:12px; font-weight:600; color:#374151;">매칭 대상</label>
-      <select id="cr_target" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; margin-top:4px;">
-        <option value="all">전체 (상품명 + 옵션)</option>
-        <option value="option">옵션만</option>
-        <option value="name">상품명만</option>
-      </select>
-    </div>
-  </div>
+<div class="box hidden" id="ss"><div class="box-h">📊 매핑 결과</div><div class="box-b">
+<div class="sg">
+<div class="sc"><div class="l">총 주문건</div><div class="v b" id="s1">0</div></div>
+<div class="sc"><div class="l">학습규칙 적용</div><div class="v p" id="s5">0</div></div>
+<div class="sc"><div class="l">매핑 성공</div><div class="v g" id="s2">0</div></div>
+<div class="sc"><div class="l">매핑 실패</div><div class="v r" id="s3">0</div></div>
+<div class="sc"><div class="l">출력 행 수</div><div class="v y" id="s4">0</div></div>
+</div>
+<div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
+<div class="acts"><button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button></div>
+</div></div>
 
-  <div>
-    <label style="font-size:12px; font-weight:600; color:#374151;">매핑 결과 (상품코드:수량, 콤마로 여러 개 입력)</label>
-    <input id="cr_result" type="text" placeholder="예: 35:1, 24:2, 64:1"
-      style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; margin-top:4px;">
-    <div style="font-size:11px; color:#9ca3af; margin-top:4px;">
-      형식: <code>상품코드:수량</code> (수량은 주문수량과 곱해짐). 예) <code>35:1, 24:2</code> = 보틀 1개 + 쿠키앤크림 560g 2개
-    </div>
-  </div>
+<div class="box hidden" id="ps"><div class="box-h"><span>🔍 결과 미리보기</span><div style="display:flex;gap:6px"><button class="btn btn-o" style="padding:5px 10px;font-size:10px" onclick="tv('m')">✅ 매핑</button><button class="btn btn-o" style="padding:5px 10px;font-size:10px" onclick="tv('u')">❌ 미매핑</button></div></div><div class="box-b">
+<div id="mv"><div class="tw"><table><thead><tr><th>판매처명</th><th>판매처 상품코드</th><th>판매처 상품명</th><th>판매처 옵션</th><th>상품코드</th><th>상품명</th><th>수량</th><th>관리번호</th><th>매칭방식</th></tr></thead><tbody id="mt"></tbody></table></div></div>
+<div id="uv" class="hidden"><div class="tw"><table><thead><tr><th>관리번호</th><th>판매처</th><th>상품코드</th><th>상품명</th><th>옵션</th><th>수량</th><th>사유</th><th>+ 학습</th></tr></thead><tbody id="ut"></tbody></table></div></div>
+</div></div>
 
-  <div style="margin-top:14px; display:flex; gap:8px; align-items:center;">
-    <button id="cr_addBtn" style="background:#059669;">＋ 패턴 추가</button>
-    <button id="cr_exportBtn" style="background:#0ea5e9;">📤 내보내기 (JSON)</button>
-    <button id="cr_importBtn" style="background:#8b5cf6;">📥 가져오기</button>
-    <input id="cr_importFile" type="file" accept=".json" style="display:none;">
-    <button id="cr_clearBtn" style="background:#dc2626;">🗑 전체 삭제</button>
-    <span id="cr_status" style="font-size:12px; color:#6b7280; margin-left:auto;"></span>
+<div class="box"><div class="box-h"><span>🧩 사용자 학습규칙 추가 / 관리</span><span style="font-size:11px;color:var(--m);font-weight:400">localStorage · 다음 매핑부터 자동 적용</span></div><div class="box-b">
+<div class="note" style="margin-bottom:14px;font-size:11px">
+  미매핑(★) 또는 잘못 분류된 케이스의 <b>매칭 패턴</b>과 <b>매핑 결과</b>를 등록하면 다음 실행부터 ① 단계로 자동 누적되어 적용됩니다.
+  <br>입력 예시: 패턴 <code>마스터 키트 5통+포켓 21개입</code> · 결과 <code>35:1, 24:5, 64:1</code> (보틀 1개 + 쿠앤크 560g 5개 + 스타터팩 7개입 1개)
+</div>
+<div class="crow">
+  <div class="fld"><label>매칭 패턴 (텍스트 일부 또는 <code>/정규식/i</code>)</label>
+    <input id="cr_pattern" type="text" placeholder="예: 마스터 키트 5통+포켓 21개입">
   </div>
+  <div class="fld"><label>매칭 대상</label>
+    <select id="cr_target">
+      <option value="all">전체 (상품명 + 옵션)</option>
+      <option value="option">옵션만</option>
+      <option value="name">상품명만</option>
+    </select>
+  </div>
+</div>
+<div class="fld" style="margin-bottom:10px"><label>매핑 결과 (상품코드:수량, 콤마로 여러 개)</label>
+  <input id="cr_result" type="text" placeholder="예: 35:1, 24:2, 64:1">
+</div>
+<div class="fld" style="margin-bottom:12px"><label>메모 (선택)</label>
+  <input id="cr_note" type="text" placeholder="예: 카페24 마스터 키트 패키지">
+</div>
+<div class="acts">
+<button class="btn btn-g" onclick="addRule()">＋ 학습규칙 추가</button>
+<button class="btn btn-o" onclick="exportRules()">📤 내보내기</button>
+<button class="btn btn-o" onclick="document.getElementById('cr_import').click()">📥 가져오기</button>
+<input type="file" id="cr_import" accept=".json" style="display:none" onchange="importRules(this)">
+<button class="btn btn-r" onclick="clearRules()">🗑 전체 삭제</button>
+<span id="cr_msg" style="font-size:11px;color:var(--m);margin-left:auto"></span>
+</div>
+<div style="margin-top:14px">
+  <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--t)">등록된 학습규칙 (<span id="cr_count">0</span>)</div>
+  <div class="rule-list" id="cr_list"><div class="empty">등록된 규칙이 없습니다.</div></div>
+</div>
+</div></div>
 
-  <div style="margin-top:16px;">
-    <div style="font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">등록된 사용자 정의 패턴 (<span id="cr_count">0</span>)</div>
-    <div id="cr_list" style="border:1px solid #e5e7eb; border-radius:8px; max-height:300px; overflow:auto; background:#fff;"></div>
-  </div>
 </div>
 
 <script>
-// ============================================================
-// SKU 카탈로그 (45종)
-// ============================================================
-const SKU_CATALOG = [
-  {code:4,name:"밀잇 멜론맛 560g",flavor:"멜론",size:"560g",line:"식단관리"},
-  {code:8,name:"밀잇 미숫가루맛 560g",flavor:"미숫가루",size:"560g",line:"식단관리"},
-  {code:10,name:"밀잇 바나나맛 560g",flavor:"바나나",size:"560g",line:"식단관리"},
-  {code:12,name:"밀잇 초콜릿맛 560g",flavor:"초콜릿",size:"560g",line:"식단관리"},
-  {code:16,name:"밀잇 커피맛 560g",flavor:"커피",size:"560g",line:"식단관리"},
-  {code:18,name:"밀잇 시리얼맛 560g",flavor:"시리얼",size:"560g",line:"식단관리"},
-  {code:20,name:"밀잇 피스타치오맛 560g",flavor:"피스타치오",size:"560g",line:"식단관리"},
-  {code:22,name:"밀잇 말차초코쿠키맛 560g",flavor:"말차초코쿠키",size:"560g",line:"식단관리"},
-  {code:24,name:"밀잇 쿠키앤크림맛 560g",flavor:"쿠키앤크림",size:"560g",line:"식단관리"},
-  {code:28,name:"밀잇 흑임자맛 560g",flavor:"흑임자",size:"560g",line:"식단관리"},
-  {code:36,name:"밀잇 딸기맛 560g",flavor:"딸기",size:"560g",line:"식단관리"},
-  {code:2,name:"밀잇 딸기맛 450g",flavor:"딸기",size:"450g",line:"식사대용"},
-  {code:6,name:"밀잇 미숫가루맛 450g",flavor:"미숫가루",size:"450g",line:"식사대용"},
-  {code:13,name:"밀잇 초코바나나맛 450g",flavor:"초코바나나",size:"450g",line:"식사대용"},
-  {code:26,name:"밀잇 흑임자맛 450g",flavor:"흑임자",size:"450g",line:"식사대용"},
-  {code:3,name:"밀잇 멜론맛 40g",flavor:"멜론",size:"40g",line:"포켓"},
-  {code:5,name:"밀잇 미숫가루맛 40g",flavor:"미숫가루",size:"40g",line:"포켓"},
-  {code:9,name:"밀잇 바나나맛 40g",flavor:"바나나",size:"40g",line:"포켓"},
-  {code:11,name:"밀잇 초콜릿맛 40g",flavor:"초콜릿",size:"40g",line:"포켓"},
-  {code:15,name:"밀잇 커피맛 40g",flavor:"커피",size:"40g",line:"포켓"},
-  {code:17,name:"밀잇 시리얼맛 40g",flavor:"시리얼",size:"40g",line:"포켓"},
-  {code:19,name:"밀잇 피스타치오맛 40g",flavor:"피스타치오",size:"40g",line:"포켓"},
-  {code:21,name:"밀잇 말차초코쿠키맛 40g",flavor:"말차초코쿠키",size:"40g",line:"포켓"},
-  {code:23,name:"밀잇 쿠키앤크림맛 40g",flavor:"쿠키앤크림",size:"40g",line:"포켓"},
-  {code:25,name:"밀잇 흑임자맛 40g",flavor:"흑임자",size:"40g",line:"포켓"},
-  {code:53,name:"밀잇 흑임자맛(7개입) 40g",flavor:"흑임자",size:"7개입",line:"세트"},
-  {code:54,name:"밀잇 피스타치오맛(7개입) 40g",flavor:"피스타치오",size:"7개입",line:"세트"},
-  {code:55,name:"밀잇 쿠키앤크림맛(7개입) 40g",flavor:"쿠키앤크림",size:"7개입",line:"세트"},
-  {code:56,name:"밀잇 커피맛(7개입) 40g",flavor:"커피",size:"7개입",line:"세트"},
-  {code:57,name:"밀잇 초콜릿맛(7개입) 40g",flavor:"초콜릿",size:"7개입",line:"세트"},
-  {code:58,name:"밀잇 시리얼맛(7개입) 40g",flavor:"시리얼",size:"7개입",line:"세트"},
-  {code:59,name:"밀잇 바나나맛(7개입) 40g",flavor:"바나나",size:"7개입",line:"세트"},
-  {code:60,name:"밀잇 미숫가루맛(7개입) 40g",flavor:"미숫가루",size:"7개입",line:"세트"},
-  {code:61,name:"밀잇 멜론맛(7개입) 40g",flavor:"멜론",size:"7개입",line:"세트"},
-  {code:62,name:"밀잇 말차초코쿠키맛(7개입) 40g",flavor:"말차초코쿠키",size:"7개입",line:"세트"},
-  {code:35,name:"밀잇 전용 친환경 트라이탄 보틀",flavor:"보틀",size:"보틀",line:"ACC"},
-  {code:82,name:"밀잇 포캣3종 (피+초+시)",flavor:"포캣3종",size:"세트",line:"세트"},
-  {code:83,name:"포켓몬 에어팟케이스(GWP)",flavor:"에어팟",size:"GWP",line:"GWP"},
-  {code:33,name:"밀잇 웰니스 애사비 젤리컷 8000",flavor:"애사비",size:"젤리",line:"기타"},
-  {code:29,name:"밀잇 그래놀라_애플시나몬맛",flavor:"애플시나몬",size:"그래놀라",line:"그래놀라"},
-  {code:30,name:"밀잇 그래놀라_카카오초콜릿맛",flavor:"카카오초콜릿",size:"그래놀라",line:"그래놀라"},
-  {code:31,name:"밀잇 그래놀라_티라미수맛",flavor:"티라미수",size:"그래놀라",line:"그래놀라"},
-  {code:64,name:"밀잇 스타터팩(7개입) 40g",flavor:"스타터팩",size:"7개입",line:"세트"},
-  {code:65,name:"밀잇 스타터팩(5개입) 40g",flavor:"스타터팩",size:"5개입",line:"세트"},
-  {code:66,name:"밀잇 스타터팩(10개입) 40g",flavor:"스타터팩",size:"10개입",line:"세트"},
-];
+let RD=[],OD=[],MR=[],UR=[];
+const CR_KEY='mealit_custom_rules_v2';
 
-const FLAVOR_ALIASES = {
-  "초콜릿":"초콜릿","초콜렛":"초콜릿","초콜":"초콜릿","초코":"초콜릿","쵸코":"초콜릿","chocolate":"초콜릿",
-  "미숫가루":"미숫가루","미수가루":"미숫가루","미숫":"미숫가루",
-  "흑임자":"흑임자","검은깨":"흑임자",
-  "시리얼":"시리얼","cereal":"시리얼",
-  "피스타치오":"피스타치오","피스타":"피스타치오","pistachio":"피스타치오",
-  "말차초코쿠키":"말차초코쿠키","말차초코":"말차초코쿠키","말차":"말차초코쿠키",
-  "쿠키앤크림":"쿠키앤크림","쿠키크림":"쿠키앤크림","쿠앤크":"쿠키앤크림",
-  "커피":"커피","coffee":"커피",
-  "바나나":"바나나","banana":"바나나",
-  "초코바나나":"초코바나나",
-  "멜론":"멜론","메론":"멜론",
-  "딸기":"딸기","strawberry":"딸기",
-  "트라이탄":"보틀","트라이탄 보틀":"보틀","보틀":"보틀","쉐이커":"보틀","쉐이커 보틀":"보틀",
-  "스타터팩":"스타터팩",
+// ── SKU 마스터
+const SKU = {
+  '피스타치오': [{c:'00020',n:'밀잇 피스타치오맛 560g',t:'560'},{c:'00019',n:'밀잇 피스타치오맛 40g',t:'40'},{c:'00054',n:'밀잇 피스타치오맛(7개입) 40g',t:'7p'}],
+  '시리얼': [{c:'00018',n:'밀잇 시리얼맛 560g',t:'560'},{c:'00017',n:'밀잇 시리얼맛 40g',t:'40'},{c:'00058',n:'밀잇 시리얼맛(7개입) 40g',t:'7p'}],
+  '말차초코쿠키': [{c:'00022',n:'밀잇 말차초코쿠키맛 560g',t:'560'},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',t:'40'},{c:'00062',n:'밀잇 말차초코쿠키맛(7개입) 40g',t:'7p'}],
+  '말차초코': [{c:'00022',n:'밀잇 말차초코쿠키맛 560g',t:'560'},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',t:'40'},{c:'00062',n:'밀잇 말차초코쿠키맛(7개입) 40g',t:'7p'}],
+  '초콜릿': [{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'},{c:'00011',n:'밀잇 초콜릿맛 40g',t:'40'},{c:'00057',n:'밀잇 초콜릿맛(7개입) 40g',t:'7p'}],
+  '초코': [{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'},{c:'00011',n:'밀잇 초콜릿맛 40g',t:'40'},{c:'00057',n:'밀잇 초콜릿맛(7개입) 40g',t:'7p'}],
+  '초콜리': [{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'}],
+  '쿠키앤크림': [{c:'00024',n:'밀잇 쿠키앤크림맛 560g',t:'560'},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',t:'40'},{c:'00055',n:'밀잇 쿠키앤크림맛(7개입) 40g',t:'7p'}],
+  '쿠앤크': [{c:'00024',n:'밀잇 쿠키앤크림맛 560g',t:'560'},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',t:'40'},{c:'00055',n:'밀잇 쿠키앤크림맛(7개입) 40g',t:'7p'}],
+  '미숫가루': [{c:'00008',n:'밀잇 미숫가루맛 560g',t:'560'},{c:'00006',n:'밀잇 미숫가루맛 450g',t:'450'},{c:'00005',n:'밀잇 미숫가루맛 40g',t:'40'},{c:'00060',n:'밀잇 미숫가루맛(7개입) 40g',t:'7p'}],
+  '흑임자': [{c:'00028',n:'밀잇 흑임자맛 560g',t:'560'},{c:'00026',n:'밀잇 흑임자맛 450g',t:'450'},{c:'00025',n:'밀잇 흑임자맛 40g',t:'40'},{c:'00053',n:'밀잇 흑임자맛(7개입) 40g',t:'7p'}],
+  '커피': [{c:'00016',n:'밀잇 커피맛 560g',t:'560'},{c:'00015',n:'밀잇 커피맛 40g',t:'40'},{c:'00056',n:'밀잇 커피맛(7개입) 40g',t:'7p'}],
+  '바나나': [{c:'00010',n:'밀잇 바나나맛 560g',t:'560'},{c:'00009',n:'밀잇 바나나맛 40g',t:'40'},{c:'00059',n:'밀잇 바나나맛(7개입) 40g',t:'7p'}],
+  '멜론': [{c:'00004',n:'밀잇 멜론맛 560g',t:'560'},{c:'00003',n:'밀잇 멜론맛 40g',t:'40'},{c:'00061',n:'밀잇 멜론맛(7개입) 40g',t:'7p'}],
+  '딸기': [{c:'00002',n:'밀잇 딸기맛 450g',t:'450'},{c:'00036',n:'밀잇 딸기맛 560g',t:'560'}],
+  '초코바나나': [{c:'00013',n:'밀잇 초코바나나맛 450g',t:'450'}],
 };
 
-const sortedAliases = Object.keys(FLAVOR_ALIASES).sort((a,b)=>b.length-a.length);
-const FLAVOR_RE = new RegExp("(" + sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "i");
-const FLAVOR_RE_GLOBAL = new RegExp(sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|"), "gi");
-// 노이즈 토큰: 옵션 텍스트에서 제거하거나 분리자로 처리할 키워드
-const NOISE_TOKENS = ["NEW","UPGRADE","BEST","HOT","리뉴얼","[+포켓 3종]","선택안함","필요없음","없음","해당없음"];
-// 맛 이름 앞/뒤에 띄어쓰기 없이 붙는 경우 처리할 노이즈 prefix
-const NOISE_PREFIX_RE = /(NEW|UPGRADE|BEST|HOT|리뉴얼)/gi;
-// 쿠앤크 별칭(스타터팩 [] 안의 짧은 표기) 매핑
-const SHORT_FLAVOR_MAP = {
-  "초코":"초콜릿","쿠앤크":"쿠키앤크림","말차":"말차초코쿠키","미숫":"미숫가루",
-  "흑임자":"흑임자","시리얼":"시리얼","피스타":"피스타치오","바나나":"바나나","멜론":"멜론","커피":"커피"
-};
+const SKU_CATALOG_ALL = {};
+Object.values(SKU).flat().forEach(s => { SKU_CATALOG_ALL[s.c] = s.n; });
+[['00035','밀잇 전용 친환경 트라이탄 보틀'],['00033','밀잇 웰니스 애사비 젤리컷 8000'],['00064','밀잇 스타터팩(7개입) 40g'],['00065','밀잇 스타터팩(5개입) 40g'],['00066','밀잇 스타터팩(10개입) 40g'],['00082','밀잇 포캣3종 (피+초+시)'],['00029','밀잇 그래놀라_애플시나몬맛'],['00030','밀잇 그래놀라_카카오초콜릿맛'],['00031','밀잇 그래놀라_티라미수맛'],['00083','포켓몬 에어팟케이스(GWP)']].forEach(([c,n])=>{SKU_CATALOG_ALL[c]=n});
 
-function normalize(text) {
-  if (!text) return "";
-  let s = String(text);
-  s = s.replace(/<상품명>[\s\S]*?(?=<옵션|<추가|$)/g, "");
-  s = s.replace(/<옵션정보>/g, "").replace(/<옵션>/g, "").replace(/<추가옵션>/g, " | ");
-  s = s.replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
-  // 노이즈 prefix가 맛 이름에 붙어있으면 공백 삽입 ("...2900원)NEW 쿠키앤크림" → "...2900원) NEW 쿠키앤크림")
-  s = s.replace(/([)\d원%])(NEW|UPGRADE|BEST|HOT|리뉴얼)/gi, "$1 $2 ");
-  return s;
-}
-function detectFlavor(text) {
-  if (!text) return null;
-  const m = text.match(FLAVOR_RE);
-  return m ? (FLAVOR_ALIASES[m[1].toLowerCase()] || FLAVOR_ALIASES[m[1]]) : null;
-}
-function detectSize(text, globalContext) {
-  const t = (text || "") + " " + (globalContext || "");
-  if (/7개입|7팩|7봉|7개|세트/.test(t)) return "7개입";
-  if (/10개입|10팩/.test(t)) return "10개입";
-  if (/5개입|5팩/.test(t)) return "5개입";
-  if (/560\s*g|대용량/.test(t)) return "560g";
-  if (/450\s*g|식사대용/.test(t)) return "450g";
-  if (/40\s*g|포켓|낱포|파우치|미니/.test(t)) return "40g";
-  if (/보틀|트라이탄|쉐이커/.test(t)) return "보틀";
-  if (/그래놀라/.test(t)) return "그래놀라";
-  if (/젤리|애사비/.test(t)) return "젤리";
-  return null;
-}
-function detectQty(text) {
-  const s = String(text||"");
-  // "초코(2)" 형식 우선 처리 - 괄호 안 숫자
-  const paren = s.match(/\(\s*(\d+)\s*\)/);
-  if (paren) return parseInt(paren[1]);
-  const m = s.match(/(\d+)\s*(개|통|팩|봉)/);
-  if (m) return parseInt(m[1]);
-  const m2 = s.match(/[xX×*]\s*(\d+)/);
-  return m2 ? parseInt(m2[1]) : 1;
-}
-function lookupSKU(flavor, size) {
-  if (!flavor || !size) return null;
-  if (flavor === "초코바나나") size = "450g";
-  return SKU_CATALOG.find(s => s.flavor === flavor && s.size === size) || null;
-}
-function splitTokens(text) {
-  let parts = [text];
-  // 분리자에 노이즈 prefix(NEW, UPGRADE 등)도 포함
-  [/\s*\|\s*/g, /\s*,\s*/g, /\s*\/\s*/g, /\s*;\s*/g, /\s*\+\s*/g,
-   /\s+NEW\s+/gi, /\s+UPGRADE\s+/gi, /\s+BEST\s+/gi, /\s+HOT\s+/gi, /\s+리뉴얼\s+/g].forEach(re => {
-    parts = parts.flatMap(p => p.split(re));
+function log(m,t='i'){const b=document.getElementById('lg');const d=document.createElement('div');d.className=t;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;b.appendChild(d);b.scrollTop=b.scrollHeight}
+function readXL(f,cb){const r=new FileReader();r.onload=e=>{const d=new Uint8Array(e.target.result);cb(XLSX.read(d,{type:'array',cellDates:true}))};r.readAsArrayBuffer(f)}
+function loadR(inp){const f=inp.files[0];if(!f)return;readXL(f,wb=>{const sn=wb.SheetNames.find(s=>s.includes('매핑')||s.includes('결과'))||wb.SheetNames[0];RD=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});log(`Rules: ${RD.length}행 (${sn})`,'ok');document.getElementById('rc').classList.add('ok');document.getElementById('rs').textContent=`✓ ${RD.length}행`;chk()})}
+function loadO(inp){const f=inp.files[0];if(!f)return;readXL(f,wb=>{const sn=wb.SheetNames.find(s=>s.includes('주문')||s.includes('order'))||wb.SheetNames[0];OD=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});log(`주문건: ${OD.length}행 (${sn})`,'ok');document.getElementById('oc').classList.add('ok');document.getElementById('os').textContent=`✓ ${OD.length}행`;chk()})}
+function chk(){document.getElementById('mb').disabled=!(OD.length>0);if(OD.length>0)log('준비 완료. [매핑 실행] 클릭','ok')}
+
+function padCode(c){const s=String(c||'').replace(/^0+/,'');return s?s.padStart(5,'0'):''}
+
+function buildRulesMap(){
+  const map=new Map();
+  let lv='',lpc='',lopt='',lpn='';
+  let curKey=null,curGrp=[];
+  RD.forEach(row=>{
+    let v=String(row['판매처']||row['판매처명']||'').trim();
+    let pc=String(row['판매처 상품코드']||'').trim();
+    let opt=String(row['판매처 옵션']||'').trim();
+    let pn=String(row['판매처 상품명']||'').trim();
+    if(v)lv=v;else v=lv;
+    if(pc)lpc=pc;else pc=lpc;
+    if(opt)lopt=opt;else opt=lopt;
+    if(pn)lpn=pn;else pn=lpn;
+    const skuC=padCode(row['상품코드']||'');
+    const skuN=String(row['상품명']||'').trim();
+    const qty=Number(row['수량'])||1;
+    const normOpt=normOp(opt);
+    const key=`${v}||${pc}||${normOpt}`;
+    if(key!==curKey){if(curKey&&curGrp.length)map.set(curKey,[...curGrp]);curKey=key;curGrp=[]}
+    if(skuC)curGrp.push({skuC,skuN,qty,vendor:v,prodCode:pc,option:opt,prodName:pn});
   });
-  return parts.map(s=>s.trim()).filter(Boolean);
+  if(curKey&&curGrp.length)map.set(curKey,[...curGrp]);
+  return map;
 }
-function cleanToken(tok) {
-  let s = tok;
-  NOISE_TOKENS.forEach(n => s = s.split(n).join(""));
-  s = s.replace(/\([^)]*\)/g, "");
-  s = s.replace(/:\s*/g, " ").trim();
-  return s;
+function normOp(s){s=String(s).trim();if(s==='nan'||!s)return '';s=s.replace(/<[^>]+>/g,'');s=s.replace(/\s+/g,' ').trim();return s}
+
+function detectSizeCtx(prodName, prodCode, option){
+  const combined=(prodName+' '+option+' '+prodCode).toLowerCase();
+  if(combined.includes('450g')||combined.includes('식사대용'))return '450';
+  if(combined.includes('7개입')||combined.includes('세트'))return '7p';
+  if(combined.includes('40g')||combined.includes('파우치')||combined.includes('낱포')||combined.includes('포켓'))return '40';
+  if(combined.includes('560g')||combined.includes('대용량')||combined.includes('용기')||combined.includes('1통'))return '560';
+  return '560';
+}
+function pickSKU(flavor,sizeCtx){
+  let key=flavor.replace(/맛$/,'').replace(/^NEW\s*/i,'').replace(/^UPGRADE\s*/i,'').replace(/^BEST\s*/i,'').replace(/^HOT\s*/i,'').trim();
+  if(key.includes('말차'))key='말차초코쿠키';
+  if(key.includes('쿠앤크')||key.includes('쿠키앤'))key='쿠키앤크림';
+  if(key.includes('초코바나나'))key='초코바나나';
+  else if(key.includes('초콜리'))key='초콜릿';
+  else if(key.includes('초코')&&!key.includes('바나나')&&!key.includes('말차'))key='초콜릿';
+  if(key.includes('미숫'))key='미숫가루';
+  const candidates=SKU[key];
+  if(!candidates)return null;
+  let best=candidates.find(c=>c.t===sizeCtx);
+  if(!best){if(sizeCtx==='560')best=candidates.find(c=>c.t==='560');if(!best)best=candidates[0]}
+  return best;
 }
 
-// 스타터팩 [초코(2) 말차(1) ...] 패턴 파싱
-function parseStarterPackBracket(text, baseSize, orderQty) {
-  const bracket = text.match(/\[([^\]]+)\]/);
-  if (!bracket) return null;
-  const inner = bracket[1];
-  // "초코(2) 말차(1) 쿠앤크(1)..." 형식 추출
-  const re = /(초코|쿠앤크|말차|미숫|흑임자|시리얼|피스타|바나나|멜론|커피|초콜릿|쿠키앤크림|말차초코쿠키|미숫가루|피스타치오)\s*\(?\s*(\d+)\s*\)?/g;
-  const found = [];
+function parseOption(option,prodName,prodCode,orderQty){
+  const results=[];
+  const opt=normOp(option);
+  const pn=String(prodName||'');
+  const pc=String(prodCode||'');
+  // 특수
+  if(opt.includes('트라이탄')||opt.includes('전용 보틀 1개')||opt.match(/보틀\s*(350ml|1개)/)){
+    if(opt.includes('전용 보틀 1개')||opt.includes('트라이탄 쉐이커 보틀 350ml')) results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
+  }
+  if(opt.includes('딸기맛 식사대용 쉐이크 450g 1통')) results.push({c:'00002',n:'밀잇 딸기맛 450g',q:1});
+  if(opt.includes('스타터팩 7종')||pn.includes('스타터팩 7종')) results.push({c:'00064',n:'밀잇 스타터팩(7개입) 40g',q:1});
+  if(opt.includes('스타터팩 10개입')||pn.includes('10가지맛')) results.push({c:'00066',n:'밀잇 스타터팩(10개입) 40g',q:1});
+  if(opt.includes('스타터팩 5개입')||opt.includes('5가지 맛')) results.push({c:'00065',n:'밀잇 스타터팩(5개입) 40g',q:1});
+  if(opt.includes('2주갓생팩 13개입')){
+    results.push({c:'00011',n:'밀잇 초콜릿맛 40g',q:2},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',q:1},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',q:1},{c:'00009',n:'밀잇 바나나맛 40g',q:1},{c:'00005',n:'밀잇 미숫가루맛 40g',q:2},{c:'00025',n:'밀잇 흑임자맛 40g',q:1},{c:'00017',n:'밀잇 시리얼맛 40g',q:1},{c:'00015',n:'밀잇 커피맛 40g',q:1},{c:'00019',n:'밀잇 피스타치오맛 40g',q:2},{c:'00003',n:'밀잇 멜론맛 40g',q:1});
+    return results;
+  }
+  if(opt.includes('올인원팩 16개입')){
+    results.push({c:'00019',n:'밀잇 피스타치오맛 40g',q:2},{c:'00011',n:'밀잇 초콜릿맛 40g',q:2},{c:'00017',n:'밀잇 시리얼맛 40g',q:2},{c:'00005',n:'밀잇 미숫가루맛 40g',q:2},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',q:1},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',q:1},{c:'00009',n:'밀잇 바나나맛 40g',q:1},{c:'00003',n:'밀잇 멜론맛 40g',q:1},{c:'00025',n:'밀잇 흑임자맛 40g',q:2},{c:'00015',n:'밀잇 커피맛 40g',q:2});
+    return results;
+  }
+  if(opt.includes('포켓 3종')||opt.includes('+포켓 3종')||opt.includes('피쵸+초코+시리얼 각1포')){
+    results.push({c:'00019',n:'밀잇 피스타치오맛 40g',q:1},{c:'00011',n:'밀잇 초콜릿맛 40g',q:1},{c:'00017',n:'밀잇 시리얼맛 40g',q:1});
+  }
+  if(opt.includes('애사비')||opt.includes('젤리컷')) results.push({c:'00033',n:'밀잇 웰니스 애사비 젤리컷 8000',q:1});
+
+  const sizeCtx=detectSizeCtx(pn,pc,opt);
+  const parsed=[];
   let m;
-  while ((m = re.exec(inner)) !== null) {
-    const flavor = SHORT_FLAVOR_MAP[m[1]] || FLAVOR_ALIASES[m[1]] || m[1];
-    const qty = parseInt(m[2]) * orderQty;
-    const sku = lookupSKU(flavor, baseSize);
-    if (sku) found.push({code:sku.code, name:sku.name, qty:qty, src:m[0]});
-  }
-  return found.length ? found : null;
+  let flavorPart=opt;
+  const cutPoints=[opt.lastIndexOf('선택안함'),opt.lastIndexOf('(9900원)'),opt.lastIndexOf('(2900원)'),opt.lastIndexOf('(19900원)'),opt.lastIndexOf('(16900원)')];
+  const cutAt=Math.max(...cutPoints.filter(x=>x>=0));
+  if(cutAt>0) flavorPart=opt.substring(cutAt);
+
+  const bigRe=/(?:NEW\s+|UPGRADE\s+|BEST\s+|HOT\s+)?(\S+?)맛?\s*대용량\s*(\d+)\s*개/g;
+  while((m=bigRe.exec(flavorPart))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
+  const setRe=/(\S+?)맛?\s*세트\s*\(?\s*7\s*개입\s*\)?\s*(\d+)\s*개/g;
+  while((m=setRe.exec(flavorPart))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
+  const pktRe=/포켓형[_](\S+?)\s*(\d+)\s*개/g;
+  while((m=pktRe.exec(flavorPart))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
+  const contRe=/(\S+?)\s*용기\s*(\d+)\s*통/g;
+  while((m=contRe.exec(opt))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
+  const selRe=/맛\s*선택\d*[:\s/]+\s*(\S+?)(?:\s+시즌\d+)?\s+(\d+)\s*통/g;
+  while((m=selRe.exec(opt))!==null){const fl=m[1].replace(/시즌\d+/,'').trim();if(!parsed.some(p=>p.flavor===fl)) parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx})}
+  const reqRe=/필수\s*선택[:\s]+(?:\[BEST\]\s*)?(\S+?)(?:\s+대용량|\s+560g)?\s+(\d+)\s*통/g;
+  while((m=reqRe.exec(opt))!==null){if(!parsed.some(p=>p.flavor===m[1])) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'})}
+  const npRe=/(\S+?)\s*낱포\s*(\d+)\s*개/g;
+  while((m=npRe.exec(opt))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
+  const kRe=/맛\s*선택[:\s]+(\S+?)맛\s*(\d+)\s*개(?!입)/g;
+  while((m=kRe.exec(opt))!==null){if(!parsed.some(p=>p.flavor===m[1])) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'})}
+  const zpRe=/7개입\s*맛선택[:\s]+(\S+?)\s+7개입/g;
+  while((m=zpRe.exec(opt))!==null){if(!parsed.some(p=>p.flavor===m[1])) parsed.push({flavor:m[1],qty:1,type:'7p'})}
+  const cpRe=/밀잇\s+\S+\s+\S+\s+(\S+?)맛[^,]*,\s*(\d+)g,\s*(\d+)개/;
+  const cpM=opt.match(cpRe);
+  if(cpM&&parsed.length===0) parsed.push({flavor:cpM[1],qty:parseInt(cpM[3]),type:cpM[2]==='40'?'40':cpM[2]==='450'?'450':'560'});
+  if(parsed.length===0){const spRe=/특가[:\s]+(?:신규맛)?(\S+?)\s+(?:포켓|대용량)?\s*(\d+)\s*(?:포|통|개)/;const spM=opt.match(spRe);if(spM) parsed.push({flavor:spM[1],qty:parseInt(spM[2]),type:'40'})}
+  if(parsed.length===0){const kmRe=/맛[:\s]+(\S+)/;const kmM=opt.match(kmRe);if(kmM){const fl=kmM[1].replace(/,$/,'');parsed.push({flavor:fl,qty:1,type:sizeCtx})}}
+
+  parsed.forEach(p=>{const sku=pickSKU(p.flavor,p.type);if(sku&&!results.some(r=>r.c===sku.c)) results.push({c:sku.c,n:sku.n,q:p.qty})});
+  return results;
 }
 
-// 상품명에 직접 "맛 N통/개" 정보가 있는 경우 추출
-// 예: "미숫가루맛 1통+흑임자맛 1통", "초코바나나맛 2통"
-function parseInlineFlavors(text, baseSize, orderQty) {
-  if (!text) return null;
-  const found = [];
-  const re = new RegExp("(" + sortedAliases.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")(?:맛)?\\s*(\\d+)?\\s*(?:통|개|팩|봉|포)?", "gi");
-  let m;
-  const seen = new Set();
-  while ((m = re.exec(text)) !== null) {
-    const flavor = FLAVOR_ALIASES[m[1].toLowerCase()] || FLAVOR_ALIASES[m[1]];
-    if (!flavor || flavor === "보틀" || flavor === "스타터팩") continue;
-    const qty = (m[2] ? parseInt(m[2]) : 1) * orderQty;
-    const key = flavor;
-    if (seen.has(key)) {
-      const ex = found.find(f => f.flavor === flavor);
-      if (ex) { ex.qty += qty; continue; }
-    }
-    seen.add(key);
-    const sku = lookupSKU(flavor, baseSize);
-    if (sku) found.push({code:sku.code, name:sku.name, qty:qty, flavor, src:m[0]});
-  }
-  return found.length ? found : null;
-}
-
-// ============================================================
-// 답안지 학습으로 추출한 단독특가 → 자동 SKU 매핑 (100% 일치)
-// ============================================================
-const SPECIAL_OFFER_RULES = [
-  { pattern: /트라이탄\s*쉐이커?\s*보틀\s*350ml/i, code: 35, name: "밀잇 전용 친환경 트라이탄 보틀" },
-  { pattern: /\[\d+월단독특가\][^,<]*딸기맛?\s*식사대용\s*쉐이크\s*450g/i, code: 2, name: "밀잇 딸기맛 450g" },
-  { pattern: /\[입문자\s*추천\][^,<]*포켓형[^,<]*스타터팩\s*7종/i, code: 64, name: "밀잇 스타터팩(7개입) 40g" },
-  { pattern: /\[혈당DOWN\][^,<]*애사비\s*젤리컷/i, code: 33, name: "밀잇 웰니스 애사비 젤리컷 8000" },
-  { pattern: /애사비\s*젤리컷\s*8000/i, code: 33, name: "밀잇 웰니스 애사비 젤리컷 8000" },
-];
-
-// ============================================================
-// 패키지 옵션에 보틀 자동 포함 케이스
-// ============================================================
-const BOTTLE_AUTO_PATTERNS = [
-  /\[보틀증정\]/i,
-  /\(\+\s*보틀\s*증정\s*\)/i,
-  /보틀\s*증정/i,
-];
-
-// ============================================================
-// 스타터팩 키워드 인식 (사이즈/개입수 자동 판별)
-// ============================================================
-function detectStarterPackSKU(text) {
-  if (!text) return null;
-  if (/스타터팩\s*10\s*개입|10\s*개입.*\[.*피스타.*멜론.*초코.*커피.*바나나.*말차.*시리얼/.test(text)) return {code:66, name:"밀잇 스타터팩(10개입) 40g"};
-  if (/스타터팩\s*5\s*개입|5\s*개입.*\[.*피스타.*멜론.*초코.*커피.*바나나/.test(text)) return {code:65, name:"밀잇 스타터팩(5개입) 40g"};
-  if (/스타터팩\s*7\s*개입|스타터팩\s*7\s*종|포켓형.*스타터팩\s*7/.test(text)) return {code:64, name:"밀잇 스타터팩(7개입) 40g"};
-  if (/스타터팩\s*5\s*종/.test(text)) return {code:65, name:"밀잇 스타터팩(5개입) 40g"};
-  return null;
-}
-
-// ============================================================
-// 카페24 <추가옵션> 토큰 파서
-// 예: "NEW 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 미숫가루맛 세트(7개입) 1개"
-// ============================================================
-function parseAddOptionTokens(addOptText, orderQty, globalCtx) {
-  if (!addOptText) return [];
-  const cleaned = addOptText.replace(/맛\s*선택\s*=/g, "");
-  const tokens = cleaned.split(/\s*,\s*/);
-  const found = [];
-
-  for (let raw of tokens) {
-    raw = raw.replace(/^(NEW|UPGRADE|BEST|HOT|리뉴얼)\s*/i, "").trim();
-    if (!raw || /^-$|^선택안함$|^필요없음$|^없음$/.test(raw)) continue;
-
-    const flavor = detectFlavor(raw);
-    if (!flavor || flavor === "보틀" || flavor === "스타터팩") continue;
-
-    // 사이즈 판별: "세트(7개입)" 또는 "세트" 또는 "7개입" → 7개입, "대용량" → 560g, "식사대용/450g" → 450g, "40g/낱포/포켓" → 40g
-    let size;
-    if (/세트\s*\(?\s*7\s*개입|7\s*개입|세트/i.test(raw)) size = "7개입";
-    else if (/대용량|560\s*g/i.test(raw)) size = "560g";
-    else if (/식사대용|450\s*g/i.test(raw)) size = "450g";
-    else if (/40\s*g|낱포|포켓/i.test(raw)) size = "40g";
-    else size = detectSize(raw, globalCtx) || "560g";
-
-    const qty = detectQty(raw) * orderQty;
-    const sku = lookupSKU(flavor, size);
-    if (!sku) continue;
-
-    const existing = found.find(f => f.code === sku.code);
-    if (existing) existing.qty += qty;
-    else found.push({code:sku.code, name:sku.name, qty:qty, src:raw});
-  }
-  return found;
-}
-
-// ============================================================
-// 카카오톡/카카오선물 21개입 분해
-// 예: "21개입 (바나나맛 7개 멜론맛 7개 피스타치오맛 7개)"
-// ============================================================
-function parseKakaoMultiPocket(text, orderQty) {
-  if (!text) return null;
-  if (!/\d+개입\s*\(/.test(text)) return null;
-  const m = text.match(/\(([^)]+)\)/);
-  if (!m) return null;
-  const inner = m[1];
-  const re = /(쿠키앤크림|말차초코쿠키|미숫가루|피스타치오|초코바나나|흑임자|시리얼|바나나|멜론|커피|초콜릿|초코|딸기)맛?\s*(\d+)\s*개?/g;
-  const found = [];
-  let mm;
-  while ((mm = re.exec(inner)) !== null) {
-    const flavor = FLAVOR_ALIASES[mm[1].toLowerCase()] || FLAVOR_ALIASES[mm[1]];
-    if (!flavor) continue;
-    const cnt = parseInt(mm[2]);
-    // 7개씩 묶이면 7개입 SKU 1개로, 그렇지 않으면 40g 단품
-    const size = (cnt % 7 === 0) ? "7개입" : "40g";
-    const sku = lookupSKU(flavor, size);
-    if (!sku) continue;
-    const qty = (size === "7개입" ? cnt / 7 : cnt) * orderQty;
-    found.push({code:sku.code, name:sku.name, qty:qty, src:mm[0]});
-  }
-  return found.length ? found : null;
-}
-
-// ============================================================
-// 지그재그 "맛 선택1:flavor N통,맛 선택2:flavor N통" 패턴
-// ============================================================
-function parseZigzagFlavorSelect(text, baseSize, orderQty) {
-  if (!text) return null;
-  const re = /(?:맛\s*선택\s*\d*|첫번째\s*맛|두번째\s*맛|필수\s*선택)\s*[:=]\s*([^,/]+?)(?=\s*(?:,|$|맛\s*선택|첫번째|두번째|필수\s*선택))/g;
-  const found = [];
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const seg = m[1].trim();
-    if (/^선택안함$|^필요없음$|^없음$|^-$/.test(seg)) continue;
-    const flavor = detectFlavor(seg);
-    if (!flavor || flavor === "보틀") continue;
-    let size;
-    if (/7\s*개입|세트/i.test(seg)) size = "7개입";
-    else if (/대용량|560\s*g/i.test(seg)) size = "560g";
-    else if (/식사대용|450\s*g/i.test(seg)) size = "450g";
-    else if (/40\s*g|포켓|낱포/i.test(seg)) size = "40g";
-    else size = baseSize;
-    const qty = detectQty(seg) * orderQty;
-    const sku = lookupSKU(flavor, size);
-    if (!sku) continue;
-    const existing = found.find(f => f.code === sku.code);
-    if (existing) existing.qty += qty;
-    else found.push({code:sku.code, name:sku.name, qty:qty, src:seg});
-  }
-  return found.length ? found : null;
-}
-
-// ============================================================
-// 사용자 정의 매핑 규칙 (localStorage 저장)
-// ============================================================
-const CUSTOM_RULES_KEY = "mealit_custom_rules_v1";
-function loadCustomRules() {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_RULES_KEY) || "[]"); }
-  catch(e) { return []; }
-}
-function saveCustomRules(rules) {
-  localStorage.setItem(CUSTOM_RULES_KEY, JSON.stringify(rules));
-}
-function applyCustomRules(productName, optionRaw, orderQty) {
-  const rules = loadCustomRules();
-  const matched = [];
-  rules.forEach(rule => {
-    const haystack = rule.target === "option" ? optionRaw
-                   : rule.target === "name" ? productName
-                   : (productName + " " + optionRaw);
-    let isMatch = false;
-    try {
-      // 정규식 표기 (/pattern/flags) 지원, 아니면 단순 포함 검색
-      if (/^\/.+\/[gimsuy]*$/.test(rule.pattern)) {
-        const m = rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);
-        isMatch = new RegExp(m[1], m[2]).test(haystack);
-      } else {
-        isMatch = haystack.toLowerCase().includes(rule.pattern.toLowerCase());
-      }
-    } catch(e) { isMatch = false; }
-    if (!isMatch) return;
-    rule.results.forEach(r => {
-      const sku = SKU_CATALOG.find(s => s.code === r.code);
-      const name = sku ? sku.name : ("코드 " + r.code);
-      matched.push({code: r.code, name, qty: r.qty * orderQty, src: "custom: " + rule.pattern});
-    });
+// ── 사용자 학습규칙
+function loadRules(){try{return JSON.parse(localStorage.getItem(CR_KEY)||'[]')}catch(e){return []}}
+function saveRules(rs){localStorage.setItem(CR_KEY,JSON.stringify(rs))}
+function applyCustomRules(productName,optionRaw,orderQty){
+  const rules=loadRules();
+  const matched=[];
+  rules.forEach(rule=>{
+    const haystack=rule.target==='option'?optionRaw:rule.target==='name'?productName:(productName+' '+optionRaw);
+    let isMatch=false;
+    try{
+      if(/^\/.+\/[gimsuy]*$/.test(rule.pattern)){const m=rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);isMatch=new RegExp(m[1],m[2]).test(haystack)}
+      else isMatch=haystack.toLowerCase().includes(rule.pattern.toLowerCase());
+    }catch(e){isMatch=false}
+    if(!isMatch)return;
+    rule.results.forEach(r=>{const code=padCode(r.code);const name=SKU_CATALOG_ALL[code]||('코드 '+code);matched.push({c:code,n:name,q:r.qty*orderQty})});
   });
   return matched;
 }
 
-function mapOrder(row) {
-  const productName = row["상품명"] || "";
-  const optionRaw = row["옵션"] || "";
-  const orderQty = parseInt(row["수량"] || 1) || 1;
-  const optionNorm = normalize(optionRaw);
-  const globalCtx = productName + " " + optionRaw;
-  const hasGift = /\[\+\s*포켓\s*3\s*종\s*\]/.test(optionRaw);
-  const hasBottleAuto = BOTTLE_AUTO_PATTERNS.some(re => re.test(globalCtx));
-  const mapped = [];
-  let method = "rule", confidence = 0.7;
+function run(){
+  log('매핑 시작 (4단계)...','i');
+  MR=[];UR=[];
+  const rMap=RD.length>0?buildRulesMap():new Map();
+  log(`Rules 그룹: ${rMap.size}개 / 학습규칙: ${loadRules().length}개`,'i');
 
-  // -1) 사용자 정의 규칙 최우선 적용
-  const customMatched = applyCustomRules(productName, optionRaw, orderQty);
-  if (customMatched.length > 0) {
-    customMatched.forEach(c => {
-      if (!mapped.find(m => m.code === c.code)) mapped.push(c);
-    });
-    method = "custom_rule"; confidence = 1.0;
-    // 사용자 규칙이 매핑을 결정했으면 기본 파이프라인 건너뜀
-    if (hasGift && !mapped.find(m=>m.code===82)) {
-      mapped.push({code:82, name:"밀잇 포캣3종 (피+초+시)", qty:orderQty, src:"[+포켓 3종]"});
-    }
-    if (hasBottleAuto && !mapped.find(m=>m.code===35)) {
-      mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:orderQty, src:"보틀 자동"});
-    }
-    return { mapped, method, confidence, status: "ok" };
-  }
+  let okCount=0,customCount=0;
+  OD.forEach((o,idx)=>{
+    const vendor=String(o['판매처이름']||o['판매처']||o['판매처명']||'').trim();
+    const pcode=String(o['상품코드']||'').trim();
+    const optionRaw=String(o['옵션']||'');
+    const option=normOp(optionRaw);
+    const oQty=Number(o['수량'])||1;
+    const mgmt=String(o['관리번호']||'').trim();
+    const pName=String(o['상품명']||'').trim();
 
-  // 0) <추가옵션> 분리 (카페24 형식)
-  let mainOpt = optionNorm, addOpt = "";
-  const splitAdd = optionNorm.split(/<추가옵션>|\|\s*<추가옵션>|\s*\|\s*$/);
-  if (splitAdd.length > 1) { mainOpt = splitAdd[0]; addOpt = splitAdd.slice(1).join(" "); }
-  // normalize()에서 이미 <추가옵션>을 " | "로 치환했을 수도 있음
-  if (!addOpt && / \| /.test(optionNorm)) {
-    const parts = optionNorm.split(/ \| /);
-    mainOpt = parts[0]; addOpt = parts.slice(1).join(" ");
-  }
-
-  // 1) 단독특가 자동 SKU
-  SPECIAL_OFFER_RULES.forEach(rule => {
-    if (rule.pattern.test(globalCtx) && !mapped.find(m => m.code === rule.code)) {
-      mapped.push({code:rule.code, name:rule.name, qty:orderQty, src:"단독특가"});
-    }
-  });
-
-  // 2) 스타터팩 키워드 매핑 (10/7/5개입)
-  const starterSKU = detectStarterPackSKU(globalCtx);
-  if (starterSKU && !mapped.find(m => m.code === starterSKU.code)) {
-    mapped.push({code:starterSKU.code, name:starterSKU.name, qty:orderQty, src:"스타터팩 키워드"});
-  }
-
-  // 3) 스타터팩 [초코(2) 말차(1)...] 괄호 패턴 분해
-  const starterMatch = parseStarterPackBracket(globalCtx, detectSize(globalCtx) || "40g", orderQty);
-  if (starterMatch && starterMatch.length > 1) {
-    // 다종 분해는 단일 스타터팩 SKU를 대체
-    if (starterSKU) {
-      const idx = mapped.findIndex(m => m.code === starterSKU.code);
-      if (idx >= 0) mapped.splice(idx, 1);
-    }
-    starterMatch.forEach(s => mapped.push(s));
-    method = "starter_bracket"; confidence = 0.85;
-  }
-
-  // 4) 카카오톡 21개입 (멀티 7개입 분해)
-  const kakaoMulti = parseKakaoMultiPocket(globalCtx, orderQty);
-  if (kakaoMulti && kakaoMulti.length) {
-    kakaoMulti.forEach(s => {
-      if (!mapped.find(m => m.code === s.code)) mapped.push(s);
-    });
-    method = "kakao_multi"; confidence = 0.85;
-  }
-
-  // 5) 카페24 추가옵션 토큰 파싱
-  const addItems = parseAddOptionTokens(addOpt, orderQty, globalCtx);
-  if (addItems.length > 0) {
-    addItems.forEach(it => {
-      const existing = mapped.find(m => m.code === it.code);
-      if (existing) existing.qty += it.qty;
-      else mapped.push(it);
-    });
-    method = "add_option_tokens"; confidence = 0.9;
-  }
-
-  // 6) 지그재그 맛 선택 패턴
-  if (mapped.length === 0 || addItems.length === 0) {
-    const zz = parseZigzagFlavorSelect(globalCtx, detectSize(globalCtx) || "560g", orderQty);
-    if (zz && zz.length) {
-      zz.forEach(s => {
-        if (!mapped.find(m => m.code === s.code)) mapped.push(s);
+    // STEP 1: 사용자 학습규칙
+    const custom=applyCustomRules(pName,optionRaw,oQty);
+    if(custom.length>0){
+      custom.forEach((p,i)=>{
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q,mg:i===0?mgmt:'',mt:'학습규칙',_m:i===0});
       });
-      method = "zigzag_select"; confidence = 0.85;
+      okCount++;customCount++;
+      log(`✓ #${mgmt} 학습규칙 (${custom.length}개)`,'c');
+      return;
     }
-  }
 
-  // 7) 옵션 없는 경우 - 상품명에서 직접 추출
-  if (mapped.length === 0) {
-    if (!optionNorm || /^선택안함$|^필요없음$|^없음$/.test(optionNorm.trim())) {
-      const baseSize = detectSize(productName) || "560g";
-      const inline = parseInlineFlavors(productName, baseSize, orderQty);
-      if (inline && inline.length > 0) {
-        inline.forEach(i => mapped.push({code:i.code, name:i.name, qty:i.qty, src:i.src}));
-        method = inline.length > 1 ? "product_name_multi" : "product_name_only";
-        confidence = inline.length > 1 ? 0.8 : 0.75;
-      }
-    } else {
-      // 일반 토큰 분리
-      const tokens = splitTokens(mainOpt || optionNorm);
-      let matchedAny = false;
-      for (const rawTok of tokens) {
-        const tok = cleanToken(rawTok);
-        if (!tok || tok.length < 2) continue;
-        if (NOISE_TOKENS.some(n => tok === n)) continue;
-        const f = detectFlavor(tok);
-        if (!f || f === "스타터팩") continue;
-        const s = detectSize(tok, globalCtx) || detectSize(productName) || "560g";
-        if (f === "보틀") {
-          if (!mapped.find(m => m.code === 35)) {
-            mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:detectQty(tok)*orderQty, src:tok});
-            matchedAny = true;
-          }
-          continue;
-        }
-        const sku = lookupSKU(f, s);
-        if (!sku) continue;
-        const q = detectQty(tok) * orderQty;
-        const existing = mapped.find(m => m.code === sku.code);
-        if (existing) existing.qty += q;
-        else mapped.push({code:sku.code, name:sku.name, qty:q, src:tok});
-        matchedAny = true;
-      }
-      if (!matchedAny) {
-        const baseSize = detectSize(globalCtx) || "560g";
-        const inline = parseInlineFlavors(optionNorm, baseSize, orderQty);
-        if (inline && inline.length > 0) {
-          inline.forEach(i => mapped.push({code:i.code, name:i.name, qty:i.qty, src:i.src}));
-          method = "fallback_inline"; confidence = 0.7;
-        }
-      } else {
-        method = "generic_tokens"; confidence = 0.8;
-      }
+    // STEP 2: Rules 정확일치
+    const key1=`${vendor}||${pcode}||${option}`;
+    const grp1=rMap.get(key1);
+    if(grp1&&grp1.length>0){
+      grp1.forEach((g,i)=>{
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:g.skuC,sn:g.skuN,q:g.qty*oQty,mg:i===0?mgmt:'',mt:'정확일치',_m:i===0});
+      });
+      okCount++;
+      log(`✓ #${mgmt} 정확일치 (${grp1.length}행)`,'ok');
+      return;
     }
-  }
 
-  // 8) 사은품: 포켓 3종 / 보틀 자동
-  if (hasGift && !mapped.find(m=>m.code===82)) {
-    mapped.push({code:82, name:"밀잇 포캣3종 (피+초+시)", qty:orderQty, src:"[+포켓 3종]"});
-  }
-  if (hasBottleAuto && !mapped.find(m=>m.code===35)) {
-    mapped.push({code:35, name:"밀잇 전용 친환경 트라이탄 보틀", qty:orderQty, src:"보틀 자동"});
-  }
-
-  return {
-    mapped, method,
-    confidence: mapped.length ? confidence : 0,
-    status: mapped.length ? "ok" : "unmatched"
-  };
-}
-
-// ============================================================
-// UI
-// ============================================================
-const fileInput = document.getElementById("fileInput");
-const dropZone = document.getElementById("dropZone");
-const results = document.getElementById("results");
-const statsEl = document.getElementById("stats");
-const tableEl = document.getElementById("resultTable");
-const downloadBtn = document.getElementById("downloadBtn");
-const filenameEl = document.getElementById("filename");
-
-let lastResults = null;
-let lastFilename = "";
-
-dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragging"); });
-dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging"));
-dropZone.addEventListener("drop", e => {
-  e.preventDefault(); dropZone.classList.remove("dragging");
-  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener("change", e => {
-  if (e.target.files.length) handleFile(e.target.files[0]);
-});
-
-function handleFile(file) {
-  lastFilename = file.name;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const wb = XLSX.read(ev.target.result, {type:"array"});
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, {defval:""});
-    processRows(rows);
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function processRows(rows) {
-  const out = rows.map((r, i) => ({...r, _idx:i+1, ...mapOrder(r)}));
-  lastResults = out;
-  renderStats(out);
-  renderTable(out);
-  filenameEl.textContent = lastFilename + " · " + out.length + "건";
-  results.style.display = "block";
-}
-
-function renderStats(rows) {
-  const total = rows.length;
-  const ok = rows.filter(r => r.status === "ok").length;
-  const high = rows.filter(r => r.confidence >= 0.8).length;
-  const unmatched = total - ok;
-  statsEl.innerHTML =
-    '<div class="stat"><div class="lbl">전체 주문</div><div class="val">'+total+'</div></div>' +
-    '<div class="stat ok"><div class="lbl">매핑 성공</div><div class="val">'+ok+'</div></div>' +
-    '<div class="stat warn"><div class="lbl">고신뢰(≥0.8)</div><div class="val">'+high+'</div></div>' +
-    '<div class="stat err"><div class="lbl">미매핑</div><div class="val">'+unmatched+'</div></div>';
-}
-
-function renderTable(rows) {
-  const head = '<thead><tr>' +
-    '<th>#</th><th>관리번호</th><th>판매처</th><th>상품명</th><th>옵션</th>' +
-    '<th>수량</th><th>매핑결과</th><th>방법</th><th>신뢰도</th>' +
-    '</tr></thead>';
-  const body = rows.map(r => {
-    const cls = r.confidence >= 0.8 ? "conf-high" : r.confidence >= 0.6 ? "conf-mid" : "conf-low";
-    const mapped = r.mapped.map(m =>
-      '<span class="badge qty">'+m.code+'</span> ' + escapeHtml(m.name) +
-      ' <span class="badge qty">x'+m.qty+'</span>'
-    ).join("<br>") || "<span style='color:#dc2626'>미매핑</span>";
-    return '<tr class="'+cls+'">'+
-      '<td>'+r._idx+'</td>'+
-      '<td>'+escapeHtml(r["관리번호"]||"")+'</td>'+
-      '<td>'+escapeHtml(r["판매처이름"]||"")+'</td>'+
-      '<td>'+escapeHtml(r["상품명"]||"")+'</td>'+
-      '<td style="max-width:280px;">'+escapeHtml(r["옵션"]||"")+'</td>'+
-      '<td>'+(r["수량"]||1)+'</td>'+
-      '<td>'+mapped+'</td>'+
-      '<td><span class="badge method">'+r.method+'</span></td>'+
-      '<td>'+(r.confidence*100).toFixed(0)+'%</td>'+
-      '</tr>';
-  }).join("");
-  tableEl.innerHTML = head + '<tbody>'+body+'</tbody>';
-}
-
-function escapeHtml(s) {
-  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
-
-function padCode(code) {
-  if (code === "" || code === null || code === undefined) return "";
-  return String(code).padStart(5, "0");
-}
-
-downloadBtn.addEventListener("click", () => {
-  if (!lastResults) return;
-
-  // 같은 관리번호(주문번호) 기준으로 그룹핑 — 원본 순서 유지
-  // 처음 등장한 위치에 그룹을 만들고, 같은 관리번호가 다시 나오면 그 그룹에 매핑 항목만 추가
-  const groupMap = new Map(); // key: 관리번호, value: groupObj
-  const groupOrder = [];      // 그룹 등장 순서(원본 순서 보존)
-
-  lastResults.forEach(r => {
-    const key = r["관리번호"] || ("__row_" + r._idx); // 관리번호 없으면 행 단위로 처리
-    if (!groupMap.has(key)) {
-      const g = {
-        orderKey: key,
-        sellerName: r["판매처이름"] || "",
-        sellerCode: r["관리번호"] || "",
-        sellerOption: r["옵션"] || "",
-        sellerProductName: r["상품명"] || "",
-        items: [],
-        anyUnmatched: false
-      };
-      groupMap.set(key, g);
-      groupOrder.push(key);
+    // STEP 3: 옵션 파싱
+    const parsed=parseOption(optionRaw,pName,pcode,oQty);
+    if(parsed.length>0){
+      parsed.forEach((p,i)=>{
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q*oQty,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0});
+      });
+      okCount++;
+      log(`✓ #${mgmt} 옵션파싱 (${parsed.length}개 상품)`,'ok');
+      return;
     }
-    const g = groupMap.get(key);
-    if (r.mapped.length === 0) {
-      g.items.push({ code: "", qty: "" });
-      g.anyUnmatched = true;
-    } else {
-      r.mapped.forEach(m => g.items.push({ code: padCode(m.code), qty: m.qty }));
-    }
+
+    // STEP 4: 실패
+    UR.push({mg:mgmt,v:vendor,pc:pcode,pn:pName,opt:optionRaw,q:oQty,why:'매칭 규칙 없음'});
+    log(`✗ #${mgmt}: ${vendor}/${pcode} — 매칭 실패`,'e');
   });
 
-  // 같은 관리번호의 첫 행만 판매처 정보, 이후 행은 비움 — 원본 순서 그대로 출력
-  const out = [];
-  groupOrder.forEach(key => {
-    const g = groupMap.get(key);
-    const items = g.items.length ? g.items : [{ code: "", qty: "" }];
-    items.forEach((it, idx) => {
-      const isUnmatched = (it.code === "" || it.code === null || it.code === undefined);
-      if (idx === 0) {
-        out.push({
-          "판매처명": g.sellerName,
-          "판매처 상품코드": g.sellerCode,
-          "판매처 옵션": g.sellerOption,
-          "상품코드": it.code,
-          "수량": it.qty,
-          "판매처 상품명": g.sellerProductName,
-          "비고": isUnmatched ? "★" : ""
-        });
-      } else {
-        out.push({
-          "판매처명": "",
-          "판매처 상품코드": "",
-          "판매처 옵션": "",
-          "상품코드": it.code,
-          "수량": it.qty,
-          "판매처 상품명": "",
-          "비고": isUnmatched ? "★" : ""
-        });
-      }
-    });
-  });
-
-  const ws = XLSX.utils.json_to_sheet(out, {
-    header: ["판매처명", "판매처 상품코드", "판매처 옵션", "상품코드", "수량", "판매처 상품명", "비고"]
-  });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "match_list");
-  XLSX.writeFile(wb, lastFilename.replace(/\.[^.]+$/, "") + "_매핑결과.xlsx");
-});
-
-// ============================================================
-// 사용자 정의 패턴 UI 동작
-// ============================================================
-const cr_pattern = document.getElementById("cr_pattern");
-const cr_target  = document.getElementById("cr_target");
-const cr_result  = document.getElementById("cr_result");
-const cr_addBtn  = document.getElementById("cr_addBtn");
-const cr_exportBtn = document.getElementById("cr_exportBtn");
-const cr_importBtn = document.getElementById("cr_importBtn");
-const cr_importFile = document.getElementById("cr_importFile");
-const cr_clearBtn = document.getElementById("cr_clearBtn");
-const cr_list = document.getElementById("cr_list");
-const cr_count = document.getElementById("cr_count");
-const cr_status = document.getElementById("cr_status");
-
-function parseResultString(s) {
-  // "35:1, 24:2" → [{code:35, qty:1}, {code:24, qty:2}]
-  const items = [];
-  s.split(/\s*,\s*/).forEach(part => {
-    const m = part.match(/^\s*(\d+)\s*[:x×*]\s*(\d+)\s*$/);
-    if (m) items.push({ code: parseInt(m[1]), qty: parseInt(m[2]) });
-    else {
-      const single = part.match(/^\s*(\d+)\s*$/);
-      if (single) items.push({ code: parseInt(single[1]), qty: 1 });
-    }
-  });
-  return items;
-}
-function showStatus(msg, color) {
-  cr_status.textContent = msg;
-  cr_status.style.color = color || "#6b7280";
-  setTimeout(() => { cr_status.textContent = ""; }, 3000);
-}
-function renderRulesList() {
-  const rules = loadCustomRules();
-  cr_count.textContent = rules.length;
-  if (rules.length === 0) {
-    cr_list.innerHTML = '<div style="padding:16px; text-align:center; color:#9ca3af; font-size:13px;">등록된 규칙이 없습니다.</div>';
-    return;
-  }
-  const targetLabel = {all:"전체", option:"옵션", name:"상품명"};
-  cr_list.innerHTML = rules.map((r, i) => {
-    const resultStr = r.results.map(x => {
-      const sku = SKU_CATALOG.find(s => s.code === x.code);
-      const nm = sku ? sku.name : "코드 " + x.code;
-      return `<span class="badge qty">${x.code}</span> ${escapeHtml(nm)} ×${x.qty}`;
-    }).join(" + ");
-    return `
-      <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid #f3f4f6; font-size:13px;">
-        <div style="flex:0 0 28px; font-weight:600; color:#6b7280;">#${i+1}</div>
-        <div style="flex:1; min-width:0;">
-          <div style="font-weight:600; color:#1f2937; word-break:break-all;">${escapeHtml(r.pattern)}</div>
-          <div style="font-size:11px; color:#6b7280; margin-top:2px;">대상: ${targetLabel[r.target]||r.target} · ${escapeHtml(r.note||"")}</div>
-          <div style="margin-top:4px;">→ ${resultStr}</div>
-        </div>
-        <button data-idx="${i}" class="cr_delBtn" style="background:#ef4444; padding:4px 10px; font-size:12px;">삭제</button>
-      </div>
-    `;
-  }).join("");
-  cr_list.querySelectorAll(".cr_delBtn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const idx = parseInt(btn.dataset.idx);
-      const rs = loadCustomRules();
-      rs.splice(idx, 1);
-      saveCustomRules(rs);
-      renderRulesList();
-      showStatus("규칙이 삭제되었습니다.", "#dc2626");
-      // 결과가 이미 있으면 재매핑 적용
-      if (lastResults) reprocessLastResults();
-    });
-  });
-}
-function reprocessLastResults() {
-  if (!lastResults) return;
-  const rerun = lastResults.map(r => {
-    const original = {"관리번호":r["관리번호"],"판매처이름":r["판매처이름"],"상품명":r["상품명"],"옵션":r["옵션"],"수량":r["수량"]};
-    return {...r, ...mapOrder(original)};
-  });
-  lastResults = rerun;
-  renderStats(rerun);
-  renderTable(rerun);
+  log(`완료: 학습 ${customCount} / 성공 ${okCount}/${OD.length} / 출력행 ${MR.length}`,'ok');
+  document.getElementById('s1').textContent=OD.length;
+  document.getElementById('s5').textContent=customCount;
+  document.getElementById('s2').textContent=okCount;
+  document.getElementById('s3').textContent=UR.length;
+  document.getElementById('s4').textContent=MR.length;
+  document.getElementById('pf').style.width=Math.round(okCount/OD.length*100)+'%';
+  document.getElementById('ss').classList.remove('hidden');
+  document.getElementById('ps').classList.remove('hidden');
+  renderM();renderU();
 }
 
-cr_addBtn.addEventListener("click", () => {
-  const pattern = cr_pattern.value.trim();
-  const target = cr_target.value;
-  const resultStr = cr_result.value.trim();
-  if (!pattern) { showStatus("패턴을 입력해 주세요.", "#dc2626"); return; }
-  const results = parseResultString(resultStr);
-  if (results.length === 0) { showStatus("매핑 결과 형식이 잘못되었습니다.", "#dc2626"); return; }
-  const invalid = results.find(r => !SKU_CATALOG.find(s => s.code === r.code));
-  if (invalid) { showStatus("상품코드 " + invalid.code + "는 카탈로그에 없습니다.", "#dc2626"); return; }
-  const rules = loadCustomRules();
-  rules.push({ pattern, target, results, createdAt: new Date().toISOString() });
-  saveCustomRules(rules);
-  cr_pattern.value = ""; cr_result.value = "";
-  renderRulesList();
-  showStatus("✓ 패턴이 추가되었습니다. 이후 매핑부터 자동 적용됩니다.", "#059669");
-  if (lastResults) reprocessLastResults();
-});
-cr_exportBtn.addEventListener("click", () => {
-  const rules = loadCustomRules();
-  const blob = new Blob([JSON.stringify(rules, null, 2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = "mealit_custom_rules.json"; a.click();
-  URL.revokeObjectURL(url);
-});
-cr_importBtn.addEventListener("click", () => cr_importFile.click());
-cr_importFile.addEventListener("change", e => {
-  const f = e.target.files[0]; if (!f) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const imported = JSON.parse(ev.target.result);
-      if (!Array.isArray(imported)) throw new Error("invalid");
-      const existing = loadCustomRules();
-      saveCustomRules(existing.concat(imported));
-      renderRulesList();
-      showStatus("✓ " + imported.length + "개 규칙을 가져왔습니다.", "#059669");
-      if (lastResults) reprocessLastResults();
-    } catch(err) { showStatus("JSON 파일 형식 오류", "#dc2626"); }
-  };
-  reader.readAsText(f);
-  cr_importFile.value = "";
-});
-cr_clearBtn.addEventListener("click", () => {
-  if (!confirm("등록된 모든 사용자 정의 규칙을 삭제하시겠습니까?")) return;
-  saveCustomRules([]);
-  renderRulesList();
-  showStatus("모든 규칙이 삭제되었습니다.", "#dc2626");
-  if (lastResults) reprocessLastResults();
-});
-renderRulesList();
+function renderM(){
+  const tb=document.getElementById('mt');tb.innerHTML='';
+  MR.slice(0,500).forEach(r=>{
+    const tr=document.createElement('tr');
+    if(r._m)tr.className='rm';
+    [r.v,r.pc,r.pn,r.opt,r.sc,r.sn,r.q,r.mg,r.mt].forEach(v=>{const td=document.createElement('td');td.textContent=v||'';td.title=v||'';tr.appendChild(td)});
+    tb.appendChild(tr);
+  });
+}
+function renderU(){
+  const tb=document.getElementById('ut');tb.innerHTML='';
+  UR.forEach((r,idx)=>{
+    const tr=document.createElement('tr');
+    [r.mg,r.v,r.pc,r.pn,r.opt,r.q,r.why].forEach(v=>{const td=document.createElement('td');td.textContent=v||'';td.title=v||'';tr.appendChild(td)});
+    const tdBtn=document.createElement('td');
+    const btn=document.createElement('button');
+    btn.className='btn btn-y';btn.style.padding='3px 10px';btn.style.fontSize='10px';btn.textContent='＋ 학습';
+    btn.onclick=()=>{
+      document.getElementById('cr_pattern').value=r.opt||r.pn||'';
+      document.getElementById('cr_note').value=`#${r.mg} ${r.v}/${r.pc}`;
+      document.getElementById('cr_pattern').scrollIntoView({behavior:'smooth',block:'center'});
+      document.getElementById('cr_result').focus();
+    };
+    tdBtn.appendChild(btn);tr.appendChild(tdBtn);
+    tb.appendChild(tr);
+  });
+}
+function tv(w){document.getElementById('mv').classList.toggle('hidden',w!=='m');document.getElementById('uv').classList.toggle('hidden',w!=='u')}
+
+function dl(){
+  const wb=XLSX.utils.book_new();
+  const d1=MR.map(r=>({'판매처명':r.v,'판매처 상품코드':r.pc,'판매처 상품명':r.pn,'판매처 옵션':r.opt,'상품코드':r.sc,'상품명':r.sn,'수량':r.q,'관리번호':r.mg,'매칭방식':r.mt}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d1),'매핑완료');
+  if(UR.length){const d2=UR.map(r=>({'관리번호':r.mg,'판매처':r.v,'상품코드':r.pc,'상품명':r.pn,'옵션':r.opt,'수량':r.q,'사유':r.why}));XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d2),'미매핑');}
+  XLSX.writeFile(wb,`밀잇_매핑결과_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+  log('Excel 다운로드 완료','ok');
+}
+
+function clr(){RD=[];OD=[];MR=[];UR=[];['rc','oc'].forEach(id=>document.getElementById(id).classList.remove('ok'));['rs','os'].forEach(id=>document.getElementById(id).textContent='');document.getElementById('lg').innerHTML='<div class="i">// 초기화됨</div>';['ss','ps'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('rf').value='';document.getElementById('of').value=''}
+
+// ── 학습규칙 UI
+function parseResultStr(s){const items=[];s.split(/\s*,\s*/).forEach(part=>{const m=part.match(/^\s*0*(\d+)\s*[:x×*]\s*(\d+)\s*$/);if(m)items.push({code:parseInt(m[1]),qty:parseInt(m[2])});else{const single=part.match(/^\s*0*(\d+)\s*$/);if(single)items.push({code:parseInt(single[1]),qty:1})}});return items}
+function showMsg(m,c){const el=document.getElementById('cr_msg');el.textContent=m;el.style.color=c||'var(--m)';setTimeout(()=>{el.textContent=''},3000)}
+function renderRules(){
+  const rs=loadRules();
+  document.getElementById('cr_count').textContent=rs.length;
+  const list=document.getElementById('cr_list');
+  if(rs.length===0){list.innerHTML='<div class="empty">등록된 규칙이 없습니다.</div>';return}
+  const tgtLabel={all:'전체',option:'옵션',name:'상품명'};
+  list.innerHTML=rs.map((r,i)=>{
+    const resStr=r.results.map(x=>{const code=padCode(x.code);const nm=SKU_CATALOG_ALL[code]||'코드 '+code;return `<code>${code}</code> ${nm} ×${x.qty}`}).join(' + ');
+    return `<div class="rule-item"><div class="idx">#${i+1}</div><div class="pat"><div class="p">${escapeHtml(r.pattern)}</div><div class="meta">대상: ${tgtLabel[r.target]||r.target}${r.note?' · '+escapeHtml(r.note):''}</div><div class="res">→ ${resStr}</div></div><button class="btn btn-r" style="padding:4px 10px;font-size:10px" onclick="delRule(${i})">삭제</button></div>`;
+  }).join('');
+}
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function addRule(){
+  const pattern=document.getElementById('cr_pattern').value.trim();
+  const target=document.getElementById('cr_target').value;
+  const resultStr=document.getElementById('cr_result').value.trim();
+  const note=document.getElementById('cr_note').value.trim();
+  if(!pattern){showMsg('패턴을 입력해 주세요.','var(--r)');return}
+  const results=parseResultStr(resultStr);
+  if(results.length===0){showMsg('매핑 결과 형식이 잘못되었습니다. 예: 35:1, 24:2','var(--r)');return}
+  const invalid=results.find(r=>!SKU_CATALOG_ALL[padCode(r.code)]);
+  if(invalid){showMsg('상품코드 '+invalid.code+'는 카탈로그에 없습니다.','var(--r)');return}
+  const rs=loadRules();
+  rs.push({pattern,target,results,note,createdAt:new Date().toISOString()});
+  saveRules(rs);
+  document.getElementById('cr_pattern').value='';
+  document.getElementById('cr_result').value='';
+  document.getElementById('cr_note').value='';
+  renderRules();
+  showMsg('✓ 학습규칙이 추가되었습니다.','var(--g)');
+}
+function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
+function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
+function exportRules(){const rs=loadRules();const blob=new Blob([JSON.stringify(rs,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='mealit_learn_rules.json';a.click();URL.revokeObjectURL(url)}
+function importRules(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const arr=JSON.parse(e.target.result);if(!Array.isArray(arr))throw 1;const exist=loadRules();saveRules(exist.concat(arr));renderRules();showMsg('✓ '+arr.length+'개 규칙을 가져왔습니다.','var(--g)')}catch(err){showMsg('JSON 파일 형식 오류','var(--r)')}};r.readAsText(f);inp.value=''}
+renderRules();
 </script>
-
 </body>
 </html>
