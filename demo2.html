@@ -235,12 +235,35 @@ function buildRulesMap(){
 }
 function normOp(s){s=String(s).trim();if(s==='nan'||!s)return '';s=s.replace(/<[^>]+>/g,'');s=s.replace(/\s+/g,' ').trim();return s}
 
+// ── "Ng" 표기 → 사이즈 타입 변환 (g 앞 숫자 = 제품 용량)
+// 560g → 560 / 450g → 450 / 40g → 40 / 그외는 가까운 표준 사이즈로 스냅
+function gToSize(g){
+  const n=parseInt(g);
+  if(isNaN(n))return null;
+  if(n>=500)return '560';
+  if(n>=200)return '450';
+  if(n>0&&n<=100)return '40';
+  return null;
+}
+function detectGSize(text){
+  if(!text)return null;
+  // "NN g" / "NNg" 패턴 (대소문자 무관, 공백 허용)
+  const matches=[...String(text).matchAll(/(\d{2,4})\s*g\b/gi)];
+  if(matches.length===0)return null;
+  // 가장 처음 등장한 g 표기 사용
+  return gToSize(matches[0][1]);
+}
 function detectSizeCtx(prodName, prodCode, option){
-  const combined=(prodName+' '+option+' '+prodCode).toLowerCase();
-  if(combined.includes('450g')||combined.includes('식사대용'))return '450';
-  if(combined.includes('7개입')||combined.includes('세트'))return '7p';
-  if(combined.includes('40g')||combined.includes('파우치')||combined.includes('낱포')||combined.includes('포켓'))return '40';
-  if(combined.includes('560g')||combined.includes('대용량')||combined.includes('용기')||combined.includes('1통'))return '560';
+  const combined=(prodName+' '+option+' '+prodCode);
+  // 1) g 표기 최우선 (560g, 450g, 40g)
+  const g=detectGSize(combined);
+  if(g)return g;
+  // 2) 키워드 보조
+  const lc=combined.toLowerCase();
+  if(lc.includes('식사대용'))return '450';
+  if(lc.includes('7개입')||lc.includes('세트'))return '7p';
+  if(lc.includes('파우치')||lc.includes('낱포')||lc.includes('포켓'))return '40';
+  if(lc.includes('대용량')||lc.includes('용기')||lc.includes('1통'))return '560';
   return '560';
 }
 function pickSKU(flavor,sizeCtx){
@@ -263,9 +286,10 @@ function parseOption(option,prodName,prodCode,orderQty){
   const opt=normOp(option);
   const pn=String(prodName||'');
   const pc=String(prodCode||'');
-  // 특수
-  if(opt.includes('트라이탄')||opt.includes('전용 보틀 1개')||opt.match(/보틀\s*(350ml|1개)/)){
-    if(opt.includes('전용 보틀 1개')||opt.includes('트라이탄 쉐이커 보틀 350ml')) results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
+  const combined=pn+' '+opt;
+  // ── [규칙 2] 상품명/옵션에 "보틀" 단어가 있으면 보틀(00035) 자동 추가
+  if(/보틀|트라이탄|쉐이커/.test(combined)){
+    results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
   }
   if(opt.includes('딸기맛 식사대용 쉐이크 450g 1통')) results.push({c:'00002',n:'밀잇 딸기맛 450g',q:1});
   if(opt.includes('스타터팩 7종')||pn.includes('스타터팩 7종')) results.push({c:'00064',n:'밀잇 스타터팩(7개입) 40g',q:1});
@@ -292,10 +316,20 @@ function parseOption(option,prodName,prodCode,orderQty){
   const cutAt=Math.max(...cutPoints.filter(x=>x>=0));
   if(cutAt>0) flavorPart=opt.substring(cutAt);
 
+  // ── g 표기 최우선: "쿠키앤크림맛 560g 2개", "흑임자 450g 1통", "초콜릿 40g 7개" 등
+  const gRe=/(?:NEW\s+|UPGRADE\s+|BEST\s+|HOT\s+)?(\S+?)맛?\s*(\d{2,4})\s*g\s*(\d+)\s*(?:개|통|포|팩|봉)/gi;
+  while((m=gRe.exec(flavorPart))!==null){
+    const sz=gToSize(m[2]);
+    if(sz)parsed.push({flavor:m[1],qty:parseInt(m[3]),type:sz});
+  }
   const bigRe=/(?:NEW\s+|UPGRADE\s+|BEST\s+|HOT\s+)?(\S+?)맛?\s*대용량\s*(\d+)\s*개/g;
-  while((m=bigRe.exec(flavorPart))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
+  while((m=bigRe.exec(flavorPart))!==null){
+    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='560'))parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
+  }
   const setRe=/(\S+?)맛?\s*세트\s*\(?\s*7\s*개입\s*\)?\s*(\d+)\s*개/g;
-  while((m=setRe.exec(flavorPart))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
+  while((m=setRe.exec(flavorPart))!==null){
+    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
+  }
   const pktRe=/포켓형[_](\S+?)\s*(\d+)\s*개/g;
   while((m=pktRe.exec(flavorPart))!==null) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
   const contRe=/(\S+?)\s*용기\s*(\d+)\s*통/g;
@@ -310,9 +344,26 @@ function parseOption(option,prodName,prodCode,orderQty){
   while((m=kRe.exec(opt))!==null){if(!parsed.some(p=>p.flavor===m[1])) parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'})}
   const zpRe=/7개입\s*맛선택[:\s]+(\S+?)\s+7개입/g;
   while((m=zpRe.exec(opt))!==null){if(!parsed.some(p=>p.flavor===m[1])) parsed.push({flavor:m[1],qty:1,type:'7p'})}
-  const cpRe=/밀잇\s+\S+\s+\S+\s+(\S+?)맛[^,]*,\s*(\d+)g,\s*(\d+)개/;
-  const cpM=opt.match(cpRe);
-  if(cpM&&parsed.length===0) parsed.push({flavor:cpM[1],qty:parseInt(cpM[3]),type:cpM[2]==='40'?'40':cpM[2]==='450'?'450':'560'});
+  // ── [규칙 1] 쿠팡/일반 "...XX맛 ..., NNNg, N개" 패턴 (단어 개수 무관, 상품명+옵션 통합 적용)
+  // 예: "단백질 쉐이크 흑임자맛 대용량, 450g, 6개" → 흑임자 450g × 6
+  const cpRe=/(\S+?)맛[^,]*,\s*(\d{2,4})\s*g\s*,\s*(\d+)\s*개/g;
+  let cpM;
+  const cpSrc=combined+' '+opt;
+  while((cpM=cpRe.exec(cpSrc))!==null){
+    const sz=gToSize(cpM[2]);
+    if(sz&&!parsed.some(p=>p.flavor===cpM[1]&&p.type===sz)){
+      parsed.push({flavor:cpM[1],qty:parseInt(cpM[3]),type:sz});
+    }
+  }
+  // ── [규칙 3] 상품명/옵션에 "맛 + 40g + N개" 직접 명시 시 파우치(40g) SKU로 분류
+  // 예: "포켓형 바나나맛, 40g, 7개" → 바나나 40g × 7
+  const pouchRe=/(\S+?)맛[^,]*,?\s*40\s*g\s*,?\s*(\d+)\s*개/g;
+  let pM;
+  while((pM=pouchRe.exec(cpSrc))!==null){
+    if(!parsed.some(p=>p.flavor===pM[1]&&p.type==='40')){
+      parsed.push({flavor:pM[1],qty:parseInt(pM[2]),type:'40'});
+    }
+  }
   if(parsed.length===0){const spRe=/특가[:\s]+(?:신규맛)?(\S+?)\s+(?:포켓|대용량)?\s*(\d+)\s*(?:포|통|개)/;const spM=opt.match(spRe);if(spM) parsed.push({flavor:spM[1],qty:parseInt(spM[2]),type:'40'})}
   if(parsed.length===0){const kmRe=/맛[:\s]+(\S+)/;const kmM=opt.match(kmRe);if(kmM){const fl=kmM[1].replace(/,$/,'');parsed.push({flavor:fl,qty:1,type:sizeCtx})}}
 
