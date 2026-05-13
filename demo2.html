@@ -322,12 +322,15 @@ function parseOption(option,prodName,prodCode,orderQty){
   // 없으면 패키지 선택=... 구성설명 제거 후 파싱
   const rawOpt=String(option);
   const addOptMatch=rawOpt.match(/<추가옵션>(.+?)(?=<|$)/s);
+  const addInfoMatch=!addOptMatch&&rawOpt.match(/<(?:옵션정보|상품옵션)>(.+?)(?=<|$)/s);
   let parseSrc=addOptMatch
     ? addOptMatch[1].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()
-    : opt
-        .replace(/패키지\s*선택[=:][^,★<]+[,]?\s*/gi,'')
-        .replace(/★오직[^=]+=\s*선택안함\s*/gi,'')
-        .trim();
+    : addInfoMatch
+      ? addInfoMatch[1].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()
+      : opt
+          .replace(/패키지\s*선택[=:][^,★<]+[,]?\s*/gi,'')
+          .replace(/★오직[^=]+=\s*선택안함\s*/gi,'')
+          .trim();
   // 단독 특가= 이후 추가상품 내용 보충
   const specMatch=opt.match(/단독\s*특가[=:]\s*(?!선택안함)(.+?)(?:,|<|$)/);
   if(specMatch) parseSrc+=' '+specMatch[1].trim();
@@ -449,6 +452,41 @@ function parseOption(option,prodName,prodCode,orderQty){
   const SKIP_SEG=/^(선택\s*안함|보틀\s*필요\s*없음|없음|선택없음|보틀없음)$/i;
   const SKIP_WORDS=new Set(['선택','패키지','스타터팩','시즌','첫번째','두번째','포켓','대용량','용기','개당','플랜','세트','각','택']);
 
+  // ── [1+1] 채널별 추가 패턴
+
+  // 카카오톡스토어: "맛 선택 (N)/맛이름 [N통]" — 콤마 구분 다중선택
+  const kakaoSelRe=/맛\s*선택\s*\(\d+\)\s*\/\s*([가-힣]{2,10})(?:\s+\S+?)?(?:\s+(\d+)\s*통)?(?=[,<]|$)/g;
+  while((m=kakaoSelRe.exec(opt))!==null){
+    const fl=m[1].replace(/맛$/,'').trim();
+    if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl))
+      parsed.push({flavor:fl,qty:m[2]?parseInt(m[2]):1,type:sizeCtx});
+  }
+
+  // 카카오톡스토어: "[Ng/N통] 맛A N통+맛B N통" — + 연결 분리
+  const boxRe=/\[(\d{2,4})g\/\d+통\]\s*([^,<\[]+)/g;
+  while((m=boxRe.exec(opt))!==null){
+    const sz=gToSize(m[1]);
+    if(!sz) continue;
+    m[2].split('+').forEach(seg=>{
+      const mf=seg.match(/([가-힣]{2,10})/);
+      const mq=seg.match(/(\d+)\s*통/);
+      if(mf&&!SKIP_WORDS.has(mf[1])&&!parsed.some(p=>p.flavor===mf[1]&&p.type===sz))
+        parsed.push({flavor:mf[1],qty:mq?parseInt(mq[1]):1,type:sz});
+    });
+  }
+
+  // 지그재그 혼합사이즈: "식단관리 N통:맛A 대용량 N통,식사대용 N통:맛B N통"
+  const mix560Re=/(?:식단관리|대용량)[^:,]*:\s*(\S+?)(?:\s+대용량|\s+560g)?\s+(\d+)\s*통/g;
+  while((m=mix560Re.exec(opt))!==null){
+    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='560'))
+      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
+  }
+  const mix450Re=/식사대용[^:,]*:\s*(\S+?)\s+(\d+)\s*통/g;
+  while((m=mix450Re.exec(opt))!==null){
+    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='450'))
+      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'450'});
+  }
+
   // ── Fix #3: 낱개 7개입 (bare, 세트 키워드 없음): "멜론 7개입" → 7p
   const bareSetRe=/([가-힣]{2,10})\s+7\s*개입/g;
   while((m=bareSetRe.exec(parseSrc))!==null){
@@ -479,12 +517,19 @@ function parseOption(option,prodName,prodCode,orderQty){
   const slashSegs=parseSrc.split('/').map(s=>s.trim()).filter(s=>s&&!SKIP_SEG.test(s));
   if(slashSegs.length>=2){
     slashSegs.forEach(seg=>{
+      // "맛이름 N통" (수량 명시)
       const mT=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})(?:[_\s](?:대용량|식사대용))?\s+(\d+)\s*통$/);
       if(mT){
         const fl=mT[1],qty=parseInt(mT[2]);
         const t=/대용량/.test(seg)?'560':sizeCtx==='450'?'450':'560';
-        if(!parsed.some(p=>p.flavor===fl))
-          parsed.push({flavor:fl,qty,type:t});
+        parsed.push({flavor:fl,qty,type:t});
+        return;
+      }
+      // "맛이름" bare (수량 없음, 에이블리 <옵션정보> 등)
+      const mBare=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})(?:[_\s]대용량)?$/);
+      if(mBare&&!SKIP_WORDS.has(mBare[1])&&!parsed.some(p=>p.flavor===mBare[1])){
+        const t=/대용량/.test(seg)?'560':sizeCtx;
+        parsed.push({flavor:mBare[1],qty:1,type:t});
       }
     });
   }
@@ -537,7 +582,12 @@ function parseOption(option,prodName,prodCode,orderQty){
   if(parsed.length===0){const spRe=/특가[:\s]+(?:신규맛)?(\S+?)\s+(?:포켓|대용량)?\s*(\d+)\s*(?:포|통|개)/;const spM=opt.match(spRe);if(spM) parsed.push({flavor:spM[1],qty:parseInt(spM[2]),type:'40'})}
   if(parsed.length===0){const kmRe=/맛[:\s]+(\S+)/;const kmM=opt.match(kmRe);if(kmM){const fl=kmM[1].replace(/,$/,'');parsed.push({flavor:fl,qty:1,type:sizeCtx})}}
 
-  parsed.forEach(p=>{const sku=pickSKU(p.flavor,p.type);if(sku&&!results.some(r=>r.c===sku.c)) results.push({c:sku.c,n:sku.n,q:p.qty})});
+  parsed.forEach(p=>{
+    const sku=pickSKU(p.flavor,p.type);
+    if(!sku)return;
+    const ex=results.find(r=>r.c===sku.c);
+    if(ex)ex.q+=p.qty;else results.push({c:sku.c,n:sku.n,q:p.qty});
+  });
   return results;
 }
 
