@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>밀잇 주문 매핑 v2 — 옵션파싱 + 학습규칙</title>
+<title>밀잇 주문 매핑 v3 — 파싱규칙 내장</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -28,6 +28,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t);min-height:100v
 .ucard .lb{font-size:12px;font-weight:600;margin-bottom:3px;color:var(--t)}
 .ucard .sb{font-size:10px;color:var(--m)}
 .ucard .st{font-size:10px;color:var(--g);margin-top:6px;font-family:var(--mono);font-weight:600}
+.ucard.locked{cursor:default;border-style:solid;border-color:var(--a);background:#eef2ff;position:relative}
+.ucard.locked:hover{border-color:var(--a);background:#e8eeff}
+.ucard .badge{position:absolute;top:8px;right:8px;font-size:9px;background:var(--a);color:#fff;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.3px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:7px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:.2s}
 .btn-p{background:linear-gradient(135deg,var(--a),var(--a2));color:#fff}
 .btn-p:hover{opacity:.9}.btn-p:disabled{background:#cbd5e1;opacity:1;cursor:not-allowed;color:#94a3b8}
@@ -87,21 +90,26 @@ tr.group-edited:hover td{background:#fef9c3}
 <body>
 <div class="hdr">
   <img src="logo.png" alt="MEAL IT">
-  <div><h1>주문 매핑 v2 — 옵션파싱 + 학습규칙</h1><p>Rules 답안지 정확일치 → 옵션 키워드 파싱 → 사용자 학습규칙 자동 누적</p></div>
+  <div><h1>주문 매핑 v3 — 내장 파싱규칙</h1><p>학습규칙(localStorage) → 내장 파싱엔진(맛·사이즈·수량 자동 추출) → 미매핑 학습 누적</p></div>
 </div>
 <div class="c">
 
 <div class="note">
-  <b>4단계 매칭 파이프라인:</b>
+  <b>3단계 매칭 파이프라인:</b>
   ① <b>사용자 학습규칙</b>(localStorage 저장 · 영구) →
-  ② <b>Rules 답안지 정확일치</b>(태그 제거 후 v+pc+opt 키 매칭) →
-  ③ <b>옵션 키워드 파싱</b>(맛+사이즈+수량 추출) →
-  ④ <b>미매핑(★)</b>은 하단 박스에서 패턴 등록 시 ①로 누적되어 다음 실행부터 자동 적용
+  ② <b>내장 파싱규칙</b>(구분자·숫자패턴 전처리 → 맛+사이즈+수량 자동 추출 · 45 SKU) →
+  ③ <b>미매핑(★)</b>은 하단 박스에서 패턴 등록 시 ①로 누적되어 다음 실행부터 자동 적용
 </div>
 
-<div class="box"><div class="box-h">📂 파일 업로드</div><div class="box-b">
+<div class="box"><div class="box-h">📂 파일 업로드 <span style="font-size:10px;color:var(--m);font-weight:400">파싱규칙 내장 · 주문건만 업로드</span></div><div class="box-b">
 <div class="ugrid">
-<div class="ucard" id="rc" onclick="document.getElementById('rf').click()"><input type="file" id="rf" accept=".xlsx,.xls" onchange="loadR(this)"><div class="ic">📋</div><div class="lb">Rules 파일 (답안지)</div><div class="sb">rules_result_.xlsx</div><div class="st" id="rs"></div></div>
+<div class="ucard locked" id="rc">
+  <div class="badge">내장 고정 v3</div>
+  <div class="ic">⚙️</div>
+  <div class="lb">파싱 규칙 (내장 고정)</div>
+  <div class="sb">구분자·숫자패턴·대용량·세트·낱포 자동 처리</div>
+  <div class="st">✓ 45 SKU · 학습규칙 자동 누적</div>
+</div>
 <div class="ucard" id="oc" onclick="document.getElementById('of').click()"><input type="file" id="of" accept=".xlsx,.xls" onchange="loadO(this)"><div class="ic">🛒</div><div class="lb">주문건 파일</div><div class="sb">20260511주문건_.xlsx</div><div class="st" id="os"></div></div>
 </div>
 <div class="acts">
@@ -174,7 +182,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-let RD=[],OD=[],MR=[],UR=[];
+let OD=[],MR=[],UR=[];
 const CR_KEY='mealit_custom_rules_v2';
 
 // ── SKU 마스터
@@ -203,36 +211,12 @@ Object.values(SKU).flat().forEach(s => { SKU_CATALOG_ALL[s.c] = s.n; });
 
 function log(m,t='i'){const b=document.getElementById('lg');const d=document.createElement('div');d.className=t;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;b.appendChild(d);b.scrollTop=b.scrollHeight}
 function readXL(f,cb){const r=new FileReader();r.onload=e=>{const d=new Uint8Array(e.target.result);cb(XLSX.read(d,{type:'array',cellDates:true}))};r.readAsArrayBuffer(f)}
-function loadR(inp){const f=inp.files[0];if(!f)return;readXL(f,wb=>{const sn=wb.SheetNames.find(s=>s.includes('매핑')||s.includes('결과'))||wb.SheetNames[0];RD=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});log(`Rules: ${RD.length}행 (${sn})`,'ok');document.getElementById('rc').classList.add('ok');document.getElementById('rs').textContent=`✓ ${RD.length}행`;chk()})}
 function loadO(inp){const f=inp.files[0];if(!f)return;readXL(f,wb=>{const sn=wb.SheetNames.find(s=>s.includes('주문')||s.includes('order'))||wb.SheetNames[0];OD=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});log(`주문건: ${OD.length}행 (${sn})`,'ok');document.getElementById('oc').classList.add('ok');document.getElementById('os').textContent=`✓ ${OD.length}행`;chk()})}
 function chk(){document.getElementById('mb').disabled=!(OD.length>0);if(OD.length>0)log('준비 완료. [매핑 실행] 클릭','ok')}
 
 function padCode(c){const s=String(c||'').replace(/^0+/,'');return s?s.padStart(5,'0'):''}
 
-function buildRulesMap(){
-  const map=new Map();
-  let lv='',lpc='',lopt='',lpn='';
-  let curKey=null,curGrp=[];
-  RD.forEach(row=>{
-    let v=String(row['판매처']||row['판매처명']||'').trim();
-    let pc=String(row['판매처 상품코드']||'').trim();
-    let opt=String(row['판매처 옵션']||'').trim();
-    let pn=String(row['판매처 상품명']||'').trim();
-    if(v)lv=v;else v=lv;
-    if(pc)lpc=pc;else pc=lpc;
-    if(opt)lopt=opt;else opt=lopt;
-    if(pn)lpn=pn;else pn=lpn;
-    const skuC=padCode(row['상품코드']||'');
-    const skuN=String(row['상품명']||'').trim();
-    const qty=Number(row['수량'])||1;
-    const normOpt=normOp(opt);
-    const key=`${v}||${pc}||${normOpt}`;
-    if(key!==curKey){if(curKey&&curGrp.length)map.set(curKey,[...curGrp]);curKey=key;curGrp=[]}
-    if(skuC)curGrp.push({skuC,skuN,qty,vendor:v,prodCode:pc,option:opt,prodName:pn});
-  });
-  if(curKey&&curGrp.length)map.set(curKey,[...curGrp]);
-  return map;
-}
+
 function normOp(s){s=String(s).trim();if(s==='nan'||!s)return '';s=s.replace(/<[^>]+>/g,'');s=s.replace(/\s+/g,' ').trim();return s}
 
 // ── "Ng" 표기 → 사이즈 타입 변환 (g 앞 숫자 = 제품 용량)
@@ -577,10 +561,9 @@ function applyCustomRules(productName,optionRaw,orderQty){
 }
 
 function run(){
-  log('매핑 시작 (4단계)...','i');
+  log('매핑 시작 (3단계)...','i');
   MR=[];UR=[];
-  const rMap=RD.length>0?buildRulesMap():new Map();
-  log(`Rules 그룹: ${rMap.size}개 / 학습규칙: ${loadRules().length}개`,'i');
+  log(`학습규칙: ${loadRules().length}개 / 내장 파싱엔진 v3`,'i');
 
   let okCount=0,customCount=0;
   OD.forEach((o,idx)=>{
@@ -603,19 +586,7 @@ function run(){
       return;
     }
 
-    // STEP 2: Rules 정확일치
-    const key1=`${vendor}||${pcode}||${option}`;
-    const grp1=rMap.get(key1);
-    if(grp1&&grp1.length>0){
-      grp1.forEach((g,i)=>{
-        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:g.skuC,sn:g.skuN,q:g.qty*oQty,mg:i===0?mgmt:'',mt:'정확일치',_m:i===0});
-      });
-      okCount++;
-      log(`✓ #${mgmt} 정확일치 (${grp1.length}행)`,'ok');
-      return;
-    }
-
-    // STEP 3: 옵션 파싱
+    // STEP 2: 내장 파싱규칙
     const parsed=parseOption(optionRaw,pName,pcode,oQty);
     if(parsed.length>0){
       parsed.forEach((p,i)=>{
@@ -831,7 +802,7 @@ function dl(){
   log('Excel 다운로드 완료','ok');
 }
 
-function clr(){RD=[];OD=[];MR=[];UR=[];['rc','oc'].forEach(id=>document.getElementById(id).classList.remove('ok'));['rs','os'].forEach(id=>document.getElementById(id).textContent='');document.getElementById('lg').innerHTML='<div class="i">// 초기화됨</div>';['ss','ps'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('rf').value='';document.getElementById('of').value=''}
+function clr(){OD=[];MR=[];UR=[];document.getElementById('oc').classList.remove('ok');document.getElementById('os').textContent='';document.getElementById('lg').innerHTML='<div class="i">// 초기화됨 (내장 파싱규칙 유지)</div>';['ss','ps'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('of').value=''}
 
 // ── 학습규칙 UI
 function parseResultStr(s){const items=[];s.split(/\s*,\s*/).forEach(part=>{const m=part.match(/^\s*0*(\d+)\s*[:x×*]\s*(\d+)\s*$/);if(m)items.push({code:parseInt(m[1]),qty:parseInt(m[2])});else{const single=part.match(/^\s*0*(\d+)\s*$/);if(single)items.push({code:parseInt(single[1]),qty:1})}});return items}
