@@ -276,8 +276,13 @@ function pickSKU(flavor,sizeCtx){
   if(key.includes('미숫'))key='미숫가루';
   const candidates=SKU[key];
   if(!candidates)return null;
-  let best=candidates.find(c=>c.t===sizeCtx);
-  if(!best){if(sizeCtx==='560')best=candidates.find(c=>c.t==='560');if(!best)best=candidates[0]}
+  let best;
+  if((key==='딸기'||key==='초코바나나')&&sizeCtx==='560'){
+    best=candidates.find(c=>c.t==='450')||candidates.find(c=>c.t==='560')||candidates[0];
+  }else{
+    best=candidates.find(c=>c.t===sizeCtx);
+    if(!best)best=candidates[0];
+  }
   return best;
 }
 
@@ -307,9 +312,10 @@ function parseOption(option,prodName,prodCode,orderQty){
 
   // ── 고정 매핑 패턴
   if(opt.includes('딸기맛 식사대용 쉐이크 450g 1통')) results.push({c:'00002',n:'밀잇 딸기맛 450g',q:1});
-  if(opt.includes('스타터팩 7종')||pn.includes('스타터팩 7종')) results.push({c:'00064',n:'밀잇 스타터팩(7개입) 40g',q:1});
-  if(opt.includes('스타터팩 10개입')||pn.includes('10가지맛')) results.push({c:'00066',n:'밀잇 스타터팩(10개입) 40g',q:1});
-  if(opt.includes('스타터팩 5개입')||opt.includes('5가지 맛')) results.push({c:'00065',n:'밀잇 스타터팩(5개입) 40g',q:1});
+  // 스타터팩: N종/N개입/N가지맛 모두 처리 (카페24 패키지 옵션 포함)
+  if(/스타터팩\s*7종|스타터팩\s*7개입|7가지\s*맛/.test(opt+' '+pn)) results.push({c:'00064',n:'밀잇 스타터팩(7개입) 40g',q:1});
+  if(/스타터팩\s*10종|스타터팩\s*10개입|10가지\s*맛/.test(opt+' '+pn)) results.push({c:'00066',n:'밀잇 스타터팩(10개입) 40g',q:1});
+  if(/스타터팩\s*5종|스타터팩\s*5개입|5가지\s*맛/.test(opt+' '+pn)) results.push({c:'00065',n:'밀잇 스타터팩(5개입) 40g',q:1});
   if(opt.includes('2주갓생팩 13개입')){
     results.push({c:'00011',n:'밀잇 초콜릿맛 40g',q:2},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',q:1},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',q:1},{c:'00009',n:'밀잇 바나나맛 40g',q:1},{c:'00005',n:'밀잇 미숫가루맛 40g',q:2},{c:'00025',n:'밀잇 흑임자맛 40g',q:1},{c:'00017',n:'밀잇 시리얼맛 40g',q:1},{c:'00015',n:'밀잇 커피맛 40g',q:1},{c:'00019',n:'밀잇 피스타치오맛 40g',q:2},{c:'00003',n:'밀잇 멜론맛 40g',q:1});
     return results;
@@ -341,6 +347,7 @@ function parseOption(option,prodName,prodCode,orderQty){
   // 단독 특가= 이후 추가상품 내용 보충
   const specMatch=opt.match(/단독\s*특가[=:]\s*(?!선택안함)(.+?)(?:,|<|$)/);
   if(specMatch) parseSrc+=' '+specMatch[1].trim();
+  parseSrc=parseSrc.replace(/^[\s,]+/,'').trim();
 
   const cpSrc=combined+' '+parseSrc;
 
@@ -400,14 +407,14 @@ function parseOption(option,prodName,prodCode,orderQty){
   // ── 규칙 그룹 6: 맛 선택N: 형태 (콜론 앞 선택번호는 무시)
   // "맛 선택1:피스타치오 1통" → 선택번호 무시, 맛이름+통만 파싱
   // "맛 선택1:피스타치오 1통" → 선택번호 무시, 맛이름+N통
-  const selRe=/맛\s*선택\d*[:\s/]+\s*(\S+?)(?:\s+시즌\d+)?\s+(\d+)\s*통/g;
+  const selRe=/맛\s*선택\d*[:\s/]+\s*(\S+?)(?:\s+시즌\d+)?(?:\s+용기)?\s+(\d+)\s*통/g;
   while((m=selRe.exec(opt))!==null){
     const fl=m[1].replace(/시즌\d+/,'').trim();
     if(!parsed.some(p=>p.flavor===fl))
       parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
   }
   // "택1:시리얼 1통, 택2:흑임자 1통" → 택번호 무시, 맛이름+N통
-  const taekRe=/택\s*\d+\s*[:\s]+(\S+?)(?:\s+시즌\d+)?\s+(\d+)\s*통/g;
+  const taekRe=/택\s*\d+\s*[:\s]+(\S+?)(?:\s+시즌\d+)?(?:\s+용기)?\s+(\d+)\s*통/g;
   while((m=taekRe.exec(opt))!==null){
     const fl=m[1].replace(/시즌\d+/,'').trim();
     if(!parsed.some(p=>p.flavor===fl))
@@ -457,6 +464,20 @@ function parseOption(option,prodName,prodCode,orderQty){
   // "맛A N통 / 맛B N통" → 각 1개씩 (선택안함·보틀 필요 없음 세그먼트 스킵)
   const SKIP_SEG=/^(선택\s*안함|보틀\s*필요\s*없음|없음|선택없음|보틀없음)$/i;
   const SKIP_WORDS=new Set(['선택','패키지','스타터팩','시즌','첫번째','두번째','포켓','대용량','용기','개당','플랜','세트','각','택']);
+
+  // ── Fix #3: 낱개 7개입 (bare, 세트 키워드 없음): "멜론 7개입" → 7p
+  const bareSetRe=/([가-힣]{2,10})\s+7\s*개입/g;
+  while((m=bareSetRe.exec(parseSrc))!==null){
+    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
+      parsed.push({flavor:m[1],qty:1,type:'7p'});
+  }
+
+  // ── Fix #4: N포/N포씩 단위 → 40g
+  const poRe=/([가-힣]{2,10})\s*(\d+)\s*포(?:씩)?(?!\s*\d)/g;
+  while((m=poRe.exec(parseSrc))!==null){
+    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='40'))
+      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
+  }
 
   // ── [7+3] 번들 고정 파싱: 7개입 세트 1묶음 + 낱포 3개
   if(/\[7\+3\]/.test(combined)){
