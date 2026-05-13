@@ -11,7 +11,7 @@
 :root{--bg:#f7f8fb;--s:#ffffff;--s2:#f1f3f8;--bdr:#e2e6ef;--a:#4f6bf7;--a2:#7c5cfc;--g:#10b981;--r:#ef4444;--y:#d97706;--t:#0f172a;--m:#64748b;--mono:'JetBrains Mono',monospace;--sans:'Noto Sans KR',sans-serif}
 body{font-family:var(--sans);background:var(--bg);color:var(--t);min-height:100vh;line-height:1.5}
 .hdr{background:#ffffff;border-bottom:1px solid var(--bdr);padding:16px 28px;display:flex;align-items:center;gap:14px;box-shadow:0 1px 0 rgba(15,23,42,.03)}
-.logo{width:38px;height:38px;background:linear-gradient(135deg,var(--a),var(--a2));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff}
+.logo{height:34px;display:flex;align-items:center}.logo img{height:100%;width:auto;display:block}
 .hdr h1{font-size:16px;font-weight:700}.hdr p{font-size:11px;color:var(--m);margin-top:1px}
 .c{max-width:1400px;margin:0 auto;padding:20px 28px}
 .box{background:var(--s);border:1px solid var(--bdr);border-radius:10px;margin-bottom:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.03)}
@@ -71,7 +71,7 @@ tr:hover td{background:#f8fafc}
 </style>
 </head>
 <body>
-<div class="hdr"><div class="logo">M</div><div><h1>밀잇 주문 매핑 v3 — v1.1 통합기준 내장</h1><p>v1.1 통합기준(우선 규칙) + 답안지 정확일치 + 옵션 파싱 + 학습규칙</p></div></div>
+<div class="hdr"><div class="logo"><img src="logo.png" alt="MEAL IT"></div><div><h1>주문 매핑 v3 — v1.1 통합기준 내장</h1><p>v1.1 통합기준(우선 규칙) + 답안지 정확일치 + 옵션 파싱 + 학습규칙</p></div></div>
 <div class="c">
 
 <div class="note"><b>5단계 매칭 파이프라인:</b> ① <b>사용자 학습규칙</b>(localStorage·영구) → ② <b>v1.1 통합기준</b>(도민이 콜라보 pcode별 분해 + 옵션값 매핑사전 + 동봉사은품) → ③ <b>답안지 정확일치</b>(태그 제거 후 v+pc+opt 키) → ④ <b>옵션 키워드 파싱</b>(어휘 기반 토큰 매칭) → ⑤ <b>미매핑(★)</b>은 하단에서 학습규칙으로 등록 시 다음 실행부터 ①로 자동 적용</div>
