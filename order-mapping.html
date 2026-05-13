@@ -71,10 +71,10 @@ tr:hover td{background:#f8fafc}
 </style>
 </head>
 <body>
-<div class="hdr"><div class="logo"><img src="logo.png" alt="MEAL IT"></div><div><h1>주문 매핑 v3 — v1.1 통합기준 내장</h1><p>v1.1 통합기준(우선 규칙) + 답안지 정확일치 + 옵션 파싱 + 학습규칙</p></div></div>
+<div class="hdr"><div class="logo"><img src="logo.png" alt="MEAL IT"></div><div><h1>주문 매핑 v3 — v1.2 통합기준 내장</h1><p>v1.1 통합기준 + v1.2 신규 우선규칙(7건) + 답안지 정확일치 + 옵션 파싱 + 학습규칙</p></div></div>
 <div class="c">
 
-<div class="note"><b>5단계 매칭 파이프라인:</b> ① <b>사용자 학습규칙</b>(localStorage·영구) → ② <b>v1.1 통합기준</b>(도민이 콜라보 pcode별 분해 + 옵션값 매핑사전 + 동봉사은품) → ③ <b>답안지 정확일치</b>(태그 제거 후 v+pc+opt 키) → ④ <b>옵션 키워드 파싱</b>(어휘 기반 토큰 매칭) → ⑤ <b>미매핑(★)</b>은 하단에서 학습규칙으로 등록 시 다음 실행부터 ①로 자동 적용</div>
+<div class="note"><b>5단계 매칭 파이프라인:</b> ① <b>사용자 학습규칙</b>(localStorage·영구) → ② <b>v1.1 통합기준 + v1.2 우선파싱</b>(도민이 콜라보 + 옵션값사전 + 보틀증정/450g맛분리/맛(N)괄호형/(7개입)N개/슬래시맛N통/맛N통·N개/맛선택=뒤분리/맛+맛+각1포) → ③ <b>답안지 정확일치</b> → ④ <b>옵션 키워드 파싱</b>(어휘 기반 토큰 매칭) → ⑤ <b>미매핑(★)</b>은 하단에서 학습규칙으로 등록 시 다음 실행부터 ①로 자동 적용</div>
 
 <div class="box"><div class="box-h">📂 파일 업로드 <span style="font-size:10px;color:var(--m);font-weight:400">v1.1 통합기준 내장 · 주문건만 업로드</span></div><div class="box-b">
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -157,7 +157,7 @@ async function loadDB(){
     // 상태 표시
     document.getElementById('rs').textContent = `v${DB.version} · 답안지 ${DB.rules.length}그룹 · SKU ${Object.keys(DB.sku).length}종`;
     const stat = document.getElementById('dbst');
-    stat.innerHTML = `<span>SKU 마스터 ${Object.keys(DB.sku).length}종</span><span>옵션값사전 ${DB.opt_dict.length}패턴</span><span>맛별칭 ${Object.keys(DB.flavor_alias).length}건</span><span>도민이 콜라보 ${Object.keys(DB.domini).length}pcode</span><span>동봉사은품 ${DB.gift.length}규칙</span><span>답안지 ${DB.rules.length}그룹</span>`;
+    stat.innerHTML = `<span>SKU 마스터 ${Object.keys(DB.sku).length}종</span><span>옵션값사전 ${DB.opt_dict.length}패턴</span><span>맛별칭 ${Object.keys(DB.flavor_alias).length}건</span><span>도민이 콜라보 ${Object.keys(DB.domini).length}pcode</span><span>동봉사은품 ${DB.gift.length}규칙</span><span>v1.2 신규 우선규칙 8건</span><span>답안지 ${DB.rules.length}그룹</span>`;
     log(`v${DB.version} DB 로드 완료: 답안지 ${DB.rules.length}그룹, SKU ${Object.keys(DB.sku).length}종, 옵션값사전 ${DB.opt_dict.length}패턴, 도민이 ${Object.keys(DB.domini).length}pcode`,'ok');
     chk();
   }catch(e){
@@ -321,16 +321,133 @@ function pickSKUFromAlias(flavor, sizeType){
   return null;
 }
 
+// ╔════ v1.2 신규 우선 파싱 규칙 (사용자 추가 7개) ════╗
+// R1: 보틀증정/보틀/트라이탄 → 00035 +1
+// R2: 450g 컨텍스트에서 "XX맛 N통" → 450g SKU x N (다중 분리)
+// R3: "맛(N)" 괄호형 (예: 2주갓생팩 [초코(2) 말차(1) ...]) → 각 40g x N
+// R4: "(7개입) N개" → 해당 7개입 SKU x N
+// R5: 슬래시 구분 "/맛 N통" → 각 560g x N
+// R6: "맛 XX N통/N개" → 해당 사이즈 SKU x N
+// R7: "맛 선택=" 뒤 부분만 파싱 (전처리)
+// R8: "맛+맛+ 각 1포" → 각 40g x1
+const KNOWN_FLAVORS_LC = null; // 지연 초기화
+function getKnownFlavors(){
+  // flavor_alias의 정규화 결과(canonical) 집합
+  const set = new Set();
+  Object.values(DB.flavor_alias).forEach(v=>set.add(v));
+  // 그래놀라/기타도 포함
+  ['애플시나몬','카카오초콜릿','티라미수','화이트베리','스타터팩','보틀','애사비'].forEach(x=>set.add(x));
+  return set;
+}
+function tryPickSKU(rawFlavor, sizeType){
+  // pickSKU와 동일하게 별칭 정규화 후 SKU 조회
+  return pickSKU(rawFlavor, sizeType);
+}
+function applyNewPriorityRules(option, pName){
+  let opt = normOp(option);
+  if(!opt) return null;
+  const out = [];
+  const addSku = (sku, qty, src) => {
+    if(!sku) return;
+    const ex = out.find(r=>r.c===sku.c);
+    if(ex) ex.q += qty; else out.push({c:sku.c, n:sku.n, q:qty, src});
+  };
+  // R7: "맛 선택=" 뒤 부분만 파싱 범위로 사용
+  let scope = opt;
+  const sel = opt.match(/맛\s*선택\s*=/);
+  if(sel) scope = opt.substring(sel.index + sel[0].length);
+
+  // R1: 보틀 키워드
+  if(/보틀\s*증정|보틀증정|\+\s*보틀|트라이탄|쉐이커\s*보틀|보틀\s*1개/.test(opt)){
+    const s = DB.sku['00035']; if(s) addSku({c:'00035',n:s.n}, 1, '보틀증정');
+  }
+
+  // R3: "맛(N)" 괄호형 (갓생팩 류) — 2개 이상 매치되면 강한 신호
+  const re3 = /([가-힣A-Za-z]{2,8})\s*\((\d+)\)/g;
+  const parenHits = [];
+  let m;
+  while((m = re3.exec(scope)) !== null){
+    const flavor = m[1].trim(); const qty = +m[2];
+    if(qty<1||qty>20) continue;
+    const sku = tryPickSKU(flavor, '40');
+    if(sku) parenHits.push({sku, qty, flavor});
+  }
+  if(parenHits.length >= 2){
+    // 강한 신호: 갓생팩/올인원팩 류 — 다른 룰 무시하고 결과 반환
+    parenHits.forEach(h=>addSku(h.sku, h.qty, '갓생팩(맛N)'));
+    // 보틀이 같이 있으면 보존
+    return out;
+  } else if(parenHits.length===1){
+    // 1개만 매치되면 약한 신호 — 다른 룰과 병합
+    parenHits.forEach(h=>addSku(h.sku, h.qty, '맛(N)'));
+  }
+
+  // R4: (7개입) N개 — 본품 처리
+  const re4 = /([가-힣]{2,})맛?\s*(?:세트\s*)?\(7개입\)\s*(\d+)\s*개/g;
+  while((m = re4.exec(scope)) !== null){
+    addSku(tryPickSKU(m[1], '7p'), +m[2], '7개입N개');
+  }
+  // R4b: 본품(7개입)이 있고 추가옵션이 없을 때, "(7개입) N개" 단독 패턴
+  const re4b = /\(7개입\)\s*(\d+)\s*개\s*([가-힣]{2,})/g;
+  while((m = re4b.exec(scope)) !== null){
+    addSku(tryPickSKU(m[2], '7p'), +m[1], '7개입');
+  }
+
+  // R5: 슬래시 구분 "/XX(맛) N통" (스마트스토어 등)
+  const re5 = /[\/／]\s*(?:맛\s*선택\d*\s*[:\s]+)?([가-힣]{2,})맛?\s*(\d+)\s*통/g;
+  while((m = re5.exec(scope)) !== null){
+    addSku(tryPickSKU(m[1], '560'), +m[2], '/맛N통');
+  }
+
+  // R6: "맛 XX N통" / "맛 XX N개" (맛 prefix; "맛 선택"은 제외)
+  const re6 = /(?:^|[\s,])맛\s+(?!선택)([가-힣]{2,8})\s+(\d+)\s*(통|개)/g;
+  while((m = re6.exec(scope)) !== null){
+    const sz = m[3]==='통' ? '560' : '40';
+    addSku(tryPickSKU(m[1], sz), +m[2], '맛'+m[3]);
+  }
+
+  // R2: 450g 컨텍스트 — "XX맛 N통" 다중 매치
+  if(/450g|식사대용/.test(opt)){
+    const re2 = /([가-힣]{2,})맛\s*(\d+)\s*통/g;
+    while((m = re2.exec(opt)) !== null){
+      addSku(tryPickSKU(m[1], '450'), +m[2], '450g');
+    }
+  }
+
+  // R8: "맛+맛+... 각 1포 (증정)"
+  const reEach = /([가-힣\+\s]{4,40}?)\s*(?:각\s*1\s*포|각1포)/g;
+  while((m = reEach.exec(opt)) !== null){
+    const tokens = m[1].split(/[\+,]/).map(t=>t.replace(/맛$/,'').trim()).filter(t=>t.length>=2);
+    tokens.forEach(t=>{
+      addSku(tryPickSKU(t, '40'), 1, '각1포');
+    });
+  }
+
+  return out.length>0 ? out : null;
+}
+
 // ╔════ v1.1 우선규칙 통합 적용 ════╗
+function mergeResults(primary, secondary){
+  const out = [...primary];
+  const codes = new Set(primary.map(r=>r.c));
+  secondary.forEach(r=>{if(!codes.has(r.c))out.push(r)});
+  return out;
+}
 function applyV11(vendor, pcode, option, pName){
   // 1) 도민이 콜라보 pcode 기반 분해 (최우선)
   if(DB.domini[pcode]){
     const r = applyDomini(pcode, option, pName);
     if(r && r.length>0) return {results:r, method:'v1.1·도민이'};
   }
-  // 2) 옵션값 매핑사전 + 동봉사은품
-  const r2 = applyOptDict(option, pcode);
-  if(r2 && r2.length>0) return {results:r2, method:'v1.1·옵션값사전'};
+  // 2) v1.2 신규 우선 파싱 규칙
+  const newR = applyNewPriorityRules(option, pName) || [];
+  // 3) 옵션값 매핑사전 + 동봉사은품
+  const r2 = applyOptDict(option, pcode) || [];
+  if(newR.length>0 && r2.length>0){
+    return {results:mergeResults(newR, r2), method:'v1.2·우선파싱+사전'};
+  }
+  if(newR.length>0) return {results:newR, method:'v1.2·우선파싱'};
+  if(r2.length>0) return {results:r2, method:'v1.1·옵션값사전'};
   return null;
 }
 
