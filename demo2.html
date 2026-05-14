@@ -30,6 +30,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t);min-height:100v
 .ucard .st{font-size:10px;color:var(--g);margin-top:6px;font-family:var(--mono);font-weight:600}
 .ucard.locked{cursor:default;border-style:solid;border-color:var(--a);background:#eef2ff;position:relative}
 .ucard.locked:hover{border-color:var(--a);background:#e8eeff}
+.ucard.drag-over{border-color:var(--a2)!important;background:#ede9fe!important;border-style:dashed!important}
+.file-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px}
+.file-tag{display:inline-flex;align-items:center;gap:4px;background:#d1fae5;border:1px solid #6ee7b7;border-radius:4px;padding:2px 8px;font-size:10px;color:#065f46;font-family:var(--mono);max-width:180px}
+.file-tag .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.file-tag .rm{cursor:pointer;color:#6ee7b7;font-size:12px;font-weight:700;flex-shrink:0;line-height:1;padding:0 2px}
+.file-tag .rm:hover{color:#dc2626}
 .ucard .badge{position:absolute;top:8px;right:8px;font-size:9px;background:var(--a);color:#fff;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.3px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:7px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:.2s}
 .btn-p{background:linear-gradient(135deg,var(--a),var(--a2));color:#fff}
@@ -119,7 +125,16 @@ tr.group-edited:hover td{background:#fef9c3}
   <div class="sb">구분자·숫자패턴·대용량·세트·낱포 자동 처리</div>
   <div class="st">✓ 45 SKU · 학습규칙 자동 누적</div>
 </div>
-<div class="ucard" id="oc" onclick="document.getElementById('of').click()"><input type="file" id="of" accept=".xlsx,.xls" onchange="loadO(this)"><div class="ic">🛒</div><div class="lb">주문건 파일</div><div class="sb">20260511주문건_.xlsx</div><div class="st" id="os"></div></div>
+<div class="ucard" id="oc"
+  onclick="document.getElementById('of').click()"
+  ondragover="ocDrag(event)" ondragleave="ocDragLeave(event)" ondrop="ocDrop(event)">
+  <input type="file" id="of" accept=".xlsx,.xls" multiple onchange="loadO(this)">
+  <div class="ic">🛒</div>
+  <div class="lb">주문건 파일</div>
+  <div class="sb" id="oc_hint">클릭 또는 파일을 드래그</div>
+  <div class="st" id="os"></div>
+  <div class="file-tags" id="oc_files"></div>
+</div>
 </div>
 <div class="acts">
 <button class="btn btn-p" id="mb" onclick="run()" disabled>⚡ 매핑 실행</button>
@@ -196,7 +211,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-let OD=[],MR=[],UR=[];
+let OD=[],OD_FILES=[],MR=[],UR=[];
 const CR_KEY='mealit_custom_rules_v2';
 
 // ── SKU 마스터
@@ -225,7 +240,39 @@ Object.values(SKU).flat().forEach(s => { SKU_CATALOG_ALL[s.c] = s.n; });
 
 function log(m,t='i'){const b=document.getElementById('lg');const d=document.createElement('div');d.className=t;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;b.appendChild(d);b.scrollTop=b.scrollHeight}
 function readXL(f,cb){const r=new FileReader();r.onload=e=>{const d=new Uint8Array(e.target.result);cb(XLSX.read(d,{type:'array',cellDates:true}))};r.readAsArrayBuffer(f)}
-function loadO(inp){const f=inp.files[0];if(!f)return;readXL(f,wb=>{const sn=wb.SheetNames.find(s=>s.includes('주문')||s.includes('order'))||wb.SheetNames[0];OD=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});log(`주문건: ${OD.length}행 (${sn})`,'ok');document.getElementById('oc').classList.add('ok');document.getElementById('os').textContent=`✓ ${OD.length}행`;chk()})}
+function loadO(inp){Array.from(inp.files).forEach(f=>loadOneFile(f));inp.value=''}
+function loadOneFile(f){
+  if(OD_FILES.find(x=>x.name===f.name)){log(`⚠ 이미 로드됨: ${f.name}`,'w');return}
+  readXL(f,wb=>{
+    const sn=wb.SheetNames.find(s=>s.includes('주문')||s.includes('order'))||wb.SheetNames[0];
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
+    OD_FILES.push({name:f.name,rows});
+    OD=OD_FILES.flatMap(x=>x.rows);
+    updateOCard();
+    log(`+ ${f.name}: ${rows.length}행 추가 → 총 ${OD.length}행`,'ok');
+    chk();
+  });
+}
+function removeFile(name){
+  OD_FILES=OD_FILES.filter(x=>x.name!==name);
+  OD=OD_FILES.flatMap(x=>x.rows);
+  updateOCard();
+  if(!OD.length){document.getElementById('mb').disabled=true;log('파일 전체 제거됨','w')}
+}
+function updateOCard(){
+  const ok=OD_FILES.length>0;
+  document.getElementById('oc').classList.toggle('ok',ok);
+  document.getElementById('os').textContent=ok?`✓ ${OD_FILES.length}개 파일 · ${OD.length}행`:'';
+  document.getElementById('oc_hint').textContent=ok?'추가 파일 클릭 또는 드래그':'클릭 또는 파일을 드래그';
+  document.getElementById('oc_files').innerHTML=OD_FILES.map(f=>`<div class="file-tag"><span class="fn" title="${f.name}">${f.name.replace(/\.xlsx?$/i,'')} (${f.rows.length})</span><span class="rm" onclick="event.stopPropagation();removeFile('${f.name.replace(/'/g,"\\'")}')">✕</span></div>`).join('');
+}
+function ocDrag(e){e.preventDefault();document.getElementById('oc').classList.add('drag-over')}
+function ocDragLeave(e){document.getElementById('oc').classList.remove('drag-over')}
+function ocDrop(e){
+  e.preventDefault();
+  document.getElementById('oc').classList.remove('drag-over');
+  Array.from(e.dataTransfer.files).filter(f=>/\.xlsx?$/i.test(f.name)).forEach(f=>loadOneFile(f));
+}
 function chk(){document.getElementById('mb').disabled=!(OD.length>0);if(OD.length>0)log('준비 완료. [매핑 실행] 클릭','ok')}
 
 function padCode(c){const s=String(c||'').replace(/^0+/,'');return s?s.padStart(5,'0'):''}
@@ -866,7 +913,7 @@ function dl(){
   log('Excel 다운로드 완료','ok');
 }
 
-function clr(){OD=[];MR=[];UR=[];document.getElementById('oc').classList.remove('ok');document.getElementById('os').textContent='';document.getElementById('lg').innerHTML='<div class="i">// 초기화됨 (내장 파싱규칙 유지)</div>';['ss','ps'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('of').value=''}
+function clr(){OD=[];OD_FILES=[];MR=[];UR=[];updateOCard();document.getElementById('lg').innerHTML='<div class="i">// 초기화됨 (내장 파싱규칙 유지)</div>';['ss','ps'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('of').value=''}
 
 // ── 학습규칙 UI
 function parseResultStr(s){const items=[];s.split(/\s*,\s*/).forEach(part=>{const m=part.match(/^\s*0*(\d+)\s*[:x×*]\s*(\d+)\s*$/);if(m)items.push({code:parseInt(m[1]),qty:parseInt(m[2])});else{const single=part.match(/^\s*0*(\d+)\s*$/);if(single)items.push({code:parseInt(single[1]),qty:1})}});return items}
