@@ -725,11 +725,40 @@ function parseOption(option,prodName,prodCode,orderQty){
   return results;
 }
 
+// ── 내장 학습규칙 (링크 접근 시 항상 적용)
+const BUILTIN_RULES=[
+  {pattern:"특가:신규맛말차초코쿠키 포켓 1포",target:"option",results:[{code:"00022",qty:1},{code:"00062",qty:1}]},
+  {pattern:"밀잇 식단관리 단백질 쉐이크 멜론맛 560g",target:"both",results:[{code:"00004",qty:1}]},
+  {pattern:"패키지 선택=30개-스테디셀러팩(시리얼5+말차5+초코5+커피5+바나나5+피스타5)",target:"option",results:[{code:"00017",qty:5},{code:"00021",qty:5},{code:"00011",qty:5},{code:"00015",qty:5},{code:"00009",qty:5},{code:"00019",qty:5}]},
+  {pattern:"필수 선택=커피맛 1포 990원",target:"option",results:[{code:"00015",qty:1}]},
+  {pattern:"필수 옵션=딱 일주일 루틴팩 1세트 (7개입 / 개당 3357원) (32%▼), ★오직 여기서만! 단독 특가=선택안함맛 선택=흑임자맛 세트 (7개입) 1개",target:"option",results:[{code:"00053",qty:1}]},
+  {pattern:"밀잇 단백질 쉐이크 딸기맛 1통 특가",target:"both",results:[{code:"00002",qty:1}]},
+  {pattern:"밀잇 단백질 쉐이크 초코바나나맛 2통",target:"both",results:[{code:"00013",qty:2}]},
+  {pattern:"밀잇 단백질 쉐이크 미숫가루맛 2통",target:"both",results:[{code:"00006",qty:2}]},
+  {pattern:"[도민이] 쿠앤크+미숫가루+흑임자 낱개 3종",target:"both",results:[{code:"00023",qty:1},{code:"00005",qty:1},{code:"00025",qty:1}]},
+  {pattern:"1개, 560g",target:"both",results:[{code:"00004",qty:1}]},
+  {pattern:"패키지 선택=01. 도민이 픽은 이렇습니다(시리얼 1통+시리얼 7개입+흑임자 7개입+포켓랜덤증정)-",target:"both",results:[{code:"00018",qty:1},{code:"00058",qty:1},{code:"00025",qty:1},{code:"00021",qty:1}]},
+  {pattern:"패키지 선택=01. 도민이 픽은 이렇습니다(시리얼 1통+시리얼 7개입+흑임자 7개입+포켓랜덤증정)맛 선택=-",target:"both",results:[{code:"00018",qty:1},{code:"00017",qty:1},{code:"00025",qty:1},{code:"00021",qty:1}]},
+  {pattern:"패키지 선택=02. 7개입 3개초코_7개 3개",target:"both",results:[{code:"00062",qty:3}]},
+  {pattern:"맛 선택1:말차초코쿠키 1통,맛 선택2:시리얼 1통",target:"option",results:[{code:"00035",qty:1},{code:"00022",qty:1},{code:"00018",qty:1}]},
+  {pattern:"맛 선택1:시리얼 1통,맛 선택2:쿠키앤크림 1통",target:"option",results:[{code:"00035",qty:1},{code:"00018",qty:1},{code:"00024",qty:1}]},
+  {pattern:"맛 선택1:초콜릿 1통,맛 선택2:시리얼 1통",target:"option",results:[{code:"00035",qty:1},{code:"00012",qty:1},{code:"00018",qty:1}]},
+  {pattern:"맛 선택1:초콜릿 1통,맛 선택2:흑임자 560g 1통",target:"option",results:[{code:"00035",qty:1},{code:"00012",qty:1},{code:"00028",qty:1}]},
+  {pattern:"맛 선택1:커피 1통,맛 선택2:시리얼 1통",target:"option",results:[{code:"00035",qty:1},{code:"00016",qty:1},{code:"00018",qty:1}]},
+  {pattern:"맛 선택1:피스타치오 1통,맛 선택2:커피 1통",target:"option",results:[{code:"00035",qty:1},{code:"00020",qty:1},{code:"00016",qty:1}]},
+  {pattern:"전용 보틀 선택: 선택안함 / 맛 선택1: 피스타치오 1통 / 맛 선택2: 흑임자 시즌2 1통",target:"option",results:[{code:"00020",qty:1},{code:"00028",qty:1}]},
+  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=선택안함NEW 쿠키앤크림맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 초코맛 대용량 1개, 커피맛 대용량 1개",target:"option",results:[{code:"00024",qty:1},{code:"00028",qty:1},{code:"00022",qty:1},{code:"00012",qty:1},{code:"00016",qty:1}]},
+  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=선택안함NEW 쿠키앤크림맛 대용량 1개, 초코맛 대용량 3개, 커피맛 대용량 1개",target:"option",results:[{code:"00024",qty:1},{code:"00012",qty:3},{code:"00016",qty:1}]},
+  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=선택안함시리얼맛 대용량 2개, 피스타치오맛 대용량 3개",target:"option",results:[{code:"00018",qty:2},{code:"00020",qty:3}]},
+  {pattern:"패키지선택=대용량 5통+포켓 21개+보틀 증정 (-52%), ★오직 여기서만! 단독 특가=[5월단독특가] 딸기맛 식사대용 쉐이크 450g 1통 (9900원)NEW 쿠키앤크림맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 시리얼맛 대용량 1개, 피스타치오맛 대용량 1개, 초코맛 대용량 1개, 멜론맛 세트(7개입) 1개, 바나나맛 세트(7개입) 1개, 커피맛 세트(7개입) 1개",target:"option",results:[{code:"00035",qty:1},{code:"00002",qty:1},{code:"00024",qty:1},{code:"00022",qty:1},{code:"00018",qty:1},{code:"00020",qty:1},{code:"00012",qty:1},{code:"00061",qty:1},{code:"00059",qty:1},{code:"00056",qty:1}]},
+  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=[5월단독특가] 딸기맛 식사대용 쉐이크 450g 1통 (9900원)NEW 쿠키앤크림맛 대용량 1개, 시리얼맛 대용량 2개, 피스타치오맛 대용량 1개, 초코맛 대용량 1개",target:"option",results:[{code:"00002",qty:1},{code:"00024",qty:1},{code:"00018",qty:2},{code:"00020",qty:1},{code:"00012",qty:1}]},
+];
+
 // ── 사용자 학습규칙
 function loadRules(){try{return JSON.parse(localStorage.getItem(CR_KEY)||'[]')}catch(e){return []}}
 function saveRules(rs){localStorage.setItem(CR_KEY,JSON.stringify(rs))}
 function applyCustomRules(productName,optionRaw,orderQty){
-  const rules=loadRules();
+  const rules=[...BUILTIN_RULES,...loadRules()];
   const matched=[];
   rules.forEach(rule=>{
     const haystack=rule.target==='option'?optionRaw:rule.target==='name'?productName:(productName+' '+optionRaw);
@@ -747,7 +776,7 @@ function applyCustomRules(productName,optionRaw,orderQty){
 function run(){
   log('매핑 시작 (3단계)...','i');
   MR=[];UR=[];
-  log(`학습규칙: ${loadRules().length}개 / 내장 파싱엔진 v3`,'i');
+  log(`내장규칙: ${BUILTIN_RULES.length}개 / 사용자규칙: ${loadRules().length}개 / 파싱엔진 v3`,'i');
 
   let okCount=0,customCount=0;
   OD.forEach((o,idx)=>{
