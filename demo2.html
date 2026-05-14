@@ -460,13 +460,18 @@ function parseOption(option,prodName,prodCode,orderQty){
       parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
   }
   // "맛이름_7개 N개" 언더스코어 패턴 (카페24 패키지 옵션)
+  // parseSrc + opt 모두 스캔: 패키지선택= 제거로 parseSrc에서 첫 맛이 날아가는 경우 대비
   const under7Re=/([가-힣a-zA-Z]+)[_]7개\s+(\d+)\s*개/g;
-  while((m=under7Re.exec(parseSrc))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
+  for(const u7src of [parseSrc,opt]){
+    under7Re.lastIndex=0;
+    while((m=under7Re.exec(u7src))!==null){
+      if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
+        parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
+    }
   }
-  // "2개맛 선택=미숫가루_7개 1개, 시리얼_7개 1개" → = 이후 콤마 분리, 각 맛 7p
-  const selEqM=opt.match(/선택\s*=\s*(.+)/);
+  // "N개맛 선택=미숫가루_7개 1개, 시리얼_7개 1개" — "맛 선택=" 키워드로 특정
+  // (generic "선택="은 "패키지 선택=" 까지 잡아 첫 맛을 seg[0]에 포함시켜 ms7 불일치)
+  const selEqM=opt.match(/맛\s*선택\s*=\s*(.+)/);
   if(selEqM){
     selEqM[1].split(',').map(s=>s.trim()).forEach(seg=>{
       const ms7=seg.match(/^([가-힣]{2,10})_7개\s+(\d+)\s*개$/);
