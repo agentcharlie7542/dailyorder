@@ -476,23 +476,26 @@ function parseOption(option,prodName,prodCode,orderQty){
   // 중복 제거 없음: 선택1=딸기, 선택2=딸기 → 딸기 2통으로 누산
   const SKIP_SEG_EARLY=/^(선택\s*안함|보틀\s*필요\s*없음|없음|선택없음|보틀없음)$/i;
   const SKIP_WORDS_EARLY=new Set(['선택','패키지','스타터팩','시즌','첫번째','두번째','포켓','대용량','용기','개당','플랜','세트','각','택']);
-  // "맛 선택1:피스타치오 1통" / "선택1:피스타치오 1통" (맛 접두어 선택적)
-  const selRe=/(?:맛\s*)?선택\s*\d+\s*[:\s/]+\s*([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+용기)?\s+(\d+)\s*통/g;
+  // "맛 선택1:초콜릿 1통" / "맛 선택2:흑임자 560g 1통" — g 표기 포함 대응, 맛 접두어 선택적
+  const selRe=/(?:맛\s*)?선택\s*\d+\s*[:\s/]+\s*([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+(\d{3})\s*g)?(?:\s+용기)?\s+(\d+)\s*통/g;
   while((m=selRe.exec(opt))!==null){
     const fl=m[1].replace(/시즌\d+/,'').trim();
-    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
+    const sz=m[2]?gToSize(m[2]):sizeCtx;
+    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[3]),type:sz});
   }
-  // "택1:시리얼 1통, 택2:흑임자 1통" → 택번호별 각 상품
-  const taekRe=/택\s*\d+\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+용기)?\s+(\d+)\s*통/g;
+  // "택1:시리얼 1통, 택2:흑임자 560g 1통" → 택번호별 각 상품
+  const taekRe=/택\s*\d+\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+(\d{3})\s*g)?(?:\s+용기)?\s+(\d+)\s*통/g;
   while((m=taekRe.exec(opt))!==null){
     const fl=m[1].replace(/시즌\d+/,'').trim();
-    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
+    const sz=m[2]?gToSize(m[2]):sizeCtx;
+    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[3]),type:sz});
   }
-  // "첫번째 맛:미숫가루맛 1통, 두번째 맛:미숫가루맛 1통" → 순서 키워드별 각 상품 (같은 맛도 각 1통)
-  const ordRe=/(?:첫번째|두번째|세번째|네번째|다섯번째)\s*맛\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+용기)?\s+(\d+)\s*통/g;
+  // "첫번째 맛:미숫가루맛 560g 1통, 두번째 맛:미숫가루맛 1통" → 순서 키워드별 각 상품
+  const ordRe=/(?:첫번째|두번째|세번째|네번째|다섯번째)\s*맛\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+(\d{3})\s*g)?(?:\s+용기)?\s+(\d+)\s*통/g;
   while((m=ordRe.exec(opt))!==null){
     const fl=m[1].replace(/맛$/,'').replace(/시즌\d+/,'').trim();
-    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
+    const sz=m[2]?gToSize(m[2]):sizeCtx;
+    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[3]),type:sz});
   }
   // 지그재그 "구분:딸기맛 450g 1통" → g 표기 우선, 없으면 sizeCtx
   const gudanRe=/구분\s*[:\s]+(\S+?)맛?\s*(?:(\d{2,4})\s*g\s*)?(\d+)\s*통/g;
