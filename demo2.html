@@ -358,8 +358,14 @@ function parseOption(option,prodName,prodCode,orderQty){
   const pc=String(prodCode||'');
   const combined=pn+' '+opt;
 
-  // ── [규칙 2] 보틀 자동 추가
-  if(/보틀|트라이탄|쉐이커/.test(combined)){
+  // ── [규칙 2] 보틀 자동 추가/제외
+  // 제품명에 "(전용) 보틀증정" 명시 → 무조건 추가
+  // 제품명에 없고 옵션이 "전용 보틀 선택: 선택안함" → 추가 안 함
+  const pnHasBottleGift=/전용\s*보틀\s*증정|보틀\s*증정/.test(pn);
+  const optBottleNone=/전용\s*보틀\s*선택\s*[:\s]+선택\s*안함/.test(opt);
+  if(pnHasBottleGift){
+    results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
+  } else if(!optBottleNone&&/보틀|트라이탄|쉐이커/.test(combined)){
     results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
   }
 
