@@ -437,6 +437,12 @@ function parseOption(option,prodName,prodCode,orderQty){
     if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
       parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
   }
+  // "포켓 7개입  맛이름_7개" → 7p × 1 (수량 미표기 = 1개)
+  const pkt7Re=/포켓\s*7개입\s+([가-힣a-zA-Z]+)_7개/g;
+  while((m=pkt7Re.exec(parseSrc))!==null){
+    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
+      parsed.push({flavor:m[1],qty:1,type:'7p'});
+  }
 
   // ── 규칙 그룹 4: 파우치/낱포/낱개 → 40g
   // "포켓형_맛이름 N개"
