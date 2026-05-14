@@ -391,6 +391,8 @@ function parseOption(option,prodName,prodCode,orderQty){
   const sizeCtx=detectSizeCtx(pn,pc,opt);
   const parsed=[];
   let m;
+  // 맛 접미사 정규화: "미숫가루맛" → "미숫가루" (dedup/pickSKU 불일치 방지)
+  const normFl=s=>String(s).replace(/맛$/,'').trim();
 
   // ── 공통 Skip 상수 (함수 전체에서 공유)
   const SKIP_SEG_EARLY=/^(선택\s*안함|보틀\s*필요\s*없음|없음|선택없음|보틀없음)$/i;
@@ -643,17 +645,17 @@ function parseOption(option,prodName,prodCode,orderQty){
       // "맛이름 N통" (수량 명시)
       const mT=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})(?:[_\s](?:대용량|식사대용))?\s+(\d+)\s*통$/);
       if(mT){
-        const fl=mT[1],qty=parseInt(mT[2]);
+        const fl=normFl(mT[1]),qty=parseInt(mT[2]);
         const t=/대용량/.test(seg)?'560':sizeCtx==='450'?'450':'560';
         parsed.push({flavor:fl,qty,type:t});
         return;
       }
       // "맛이름" bare (수량 없음, 에이블리 <옵션정보> 등)
       const mBare=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})(?:[_\s]대용량)?$/);
-      if(mBare&&!SKIP_WORDS.has(mBare[1])&&!parsed.some(p=>p.flavor===mBare[1])){
+      if(mBare){const fl=normFl(mBare[1]);if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl)){
         const t=/대용량/.test(seg)?'560':sizeCtx;
-        parsed.push({flavor:mBare[1],qty:1,type:t});
-      }
+        parsed.push({flavor:fl,qty:1,type:t});
+      }}
     });
   }
 
@@ -663,18 +665,13 @@ function parseOption(option,prodName,prodCode,orderQty){
     commaSegs.forEach(seg=>{
       // 맛이름 대용량 N개/통
       const mBig=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})[_\s]대용량\s+(\d+)\s*(?:개|통)$/);
-      if(mBig&&!parsed.some(p=>p.flavor===mBig[1]&&p.type==='560')){
-        parsed.push({flavor:mBig[1],qty:parseInt(mBig[2]),type:'560'});return;
-      }
+      if(mBig){const fl=normFl(mBig[1]);if(!parsed.some(p=>p.flavor===fl&&p.type==='560')){parsed.push({flavor:fl,qty:parseInt(mBig[2]),type:'560'});return;}}
       // 맛이름 세트(7개입) N개
       const mSet=seg.match(/^([가-힣]{2,10})맛?\s*세트\s*\(?\s*7\s*개입\s*\)?\s*(\d+)\s*개$/);
-      if(mSet&&!parsed.some(p=>p.flavor===mSet[1]&&p.type==='7p')){
-        parsed.push({flavor:mSet[1],qty:parseInt(mSet[2]),type:'7p'});return;
-      }
+      if(mSet){const fl=normFl(mSet[1]);if(!parsed.some(p=>p.flavor===fl&&p.type==='7p')){parsed.push({flavor:fl,qty:parseInt(mSet[2]),type:'7p'});return;}}
       // 맛이름 N개 or N통 (일반)
       const mG=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})\s+(\d+)\s*(개|통)(?!입)$/);
-      if(mG&&!SKIP_WORDS.has(mG[1])&&!parsed.some(p=>p.flavor===mG[1]))
-        parsed.push({flavor:mG[1],qty:parseInt(mG[2]),type:sizeCtx});
+      if(mG){const fl=normFl(mG[1]);if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl))parsed.push({flavor:fl,qty:parseInt(mG[2]),type:sizeCtx});}
     });
   }
 
@@ -683,8 +680,7 @@ function parseOption(option,prodName,prodCode,orderQty){
   if(parseSrc.includes('+')){
     parseSrc.replace(/[\[\]]/g,'').split('+').map(s=>s.trim()).filter(s=>s).forEach(seg=>{
       const mP=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})맛?\s*(\d+)\s*통$/);
-      if(mP&&!SKIP_WORDS.has(mP[1])&&!parsed.some(p=>p.flavor===mP[1]&&p.type==='560'))
-        parsed.push({flavor:mP[1],qty:parseInt(mP[2]),type:'560'});
+      if(mP){const fl=normFl(mP[1]);if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl&&p.type==='560'))parsed.push({flavor:fl,qty:parseInt(mP[2]),type:'560'});}
     });
   }
 
