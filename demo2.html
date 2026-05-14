@@ -430,6 +430,14 @@ function parseOption(option,prodName,prodCode,orderQty){
       parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
   }
 
+  // ── 규칙 그룹 2-b: "맛이름 x N" / "맛이름 × N" — N개 선택, 각 1개씩 (수량 곱셈 아님)
+  const xSelRe=/([가-힣]{2,10})맛?\s*[xX×]\s*(\d+)/g;
+  while((m=xSelRe.exec(parseSrc))!==null){
+    const fl=m[1].replace(/맛$/,'').trim();
+    if(!SKIP_WORDS_EARLY.has(fl)&&!parsed.some(p=>p.flavor===fl))
+      parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
+  }
+
   // ── 규칙 그룹 3: 7개입 세트
   // "맛이름 세트(7개입) N개" / "맛이름_7개 N개" → 7p
   const setRe=/(\S+?)맛?\s*세트\s*\(?\s*7\s*개입\s*\)?\s*(\d+)\s*개/g;
@@ -753,8 +761,11 @@ function run(){
     // STEP 2: 내장 파싱규칙
     const parsed=parseOption(optionRaw,pName,pcode,oQty);
     if(parsed.length>0){
+      // 복수 SKU 결과 = 옵션에서 이미 선택별 1개씩 인코딩 → oQty는 선택 총합을 나타내므로 곱하지 않음
+      // 단일 SKU 결과 = 진짜 주문 수량이므로 oQty 곱셈 적용
+      const qMult=parsed.length>1?1:oQty;
       parsed.forEach((p,i)=>{
-        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q*oQty,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0});
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q*qMult,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0});
       });
       okCount++;
       log(`✓ #${mgmt} 옵션파싱 (${parsed.length}개 상품)`,'ok');
