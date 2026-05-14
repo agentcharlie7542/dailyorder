@@ -443,6 +443,15 @@ function parseOption(option,prodName,prodCode,orderQty){
     if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
       parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
   }
+  // "2개맛 선택=미숫가루_7개 1개, 시리얼_7개 1개" → = 이후 콤마 분리, 각 맛 7p
+  const selEqM=opt.match(/선택\s*=\s*(.+)/);
+  if(selEqM){
+    selEqM[1].split(',').map(s=>s.trim()).forEach(seg=>{
+      const ms7=seg.match(/^([가-힣]{2,10})_7개\s+(\d+)\s*개$/);
+      if(ms7&&!parsed.some(p=>p.flavor===ms7[1]&&p.type==='7p'))
+        parsed.push({flavor:ms7[1],qty:parseInt(ms7[2]),type:'7p'});
+    });
+  }
   // "포켓 7개입  맛이름_7개" → 7p × 1 (수량 미표기 = 1개)
   const pkt7Re=/포켓\s*7개입\s+([가-힣a-zA-Z]+)_7개/g;
   while((m=pkt7Re.exec(parseSrc))!==null){
