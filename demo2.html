@@ -650,6 +650,16 @@ function parseOption(option,prodName,prodCode,orderQty){
     });
   }
 
+  // ── 플러스(+) 분리: "피스타치오 1통+바나나 1통+미숫가루 1통" / "[딸기1통+보틀증정]"
+  // N통 = 560g, 공백 없는 "맛이름N통"도 처리, 비맛 세그먼트는 무시
+  if(parseSrc.includes('+')){
+    parseSrc.replace(/[\[\]]/g,'').split('+').map(s=>s.trim()).filter(s=>s).forEach(seg=>{
+      const mP=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})맛?\s*(\d+)\s*통$/);
+      if(mP&&!SKIP_WORDS.has(mP[1])&&!parsed.some(p=>p.flavor===mP[1]&&p.type==='560'))
+        parsed.push({flavor:mP[1],qty:parseInt(mP[2]),type:'560'});
+    });
+  }
+
   // ── 규칙 그룹 9: 일반 "맛이름 N통" / "맛이름 N개" (중간 폴백)
   // ── 규칙 그룹 10: 일반 폴백 (위 규칙 미매핑 시)
   // "맛이름 N통" → sizeCtx × N
