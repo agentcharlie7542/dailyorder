@@ -519,6 +519,11 @@ function parseOption(option,prodName,prodCode,orderQty){
     if(!parsed.some(p=>p.flavor===m[1]))
       parsed.push({flavor:m[1],qty:1,type:'7p'});
   }
+  // "맛선택2: 커피 7개입 2세트" → 커피 7p × 2 (1세트 = 7개입 1묶음)
+  const kSeteRe=/맛\s*선택\d*\s*[:\s]+([가-힣]{2,10})(?:맛)?\s+7\s*개입\s+(\d+)\s*세트/g;
+  while((m=kSeteRe.exec(opt))!==null){
+    parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
+  }
 
   // ── 규칙 그룹 7: 쿠팡 콤마 패턴
   // [규칙 1] "맛이름맛, NNNg, N개" → g 기반 분류
