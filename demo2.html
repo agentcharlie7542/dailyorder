@@ -488,6 +488,12 @@ function parseOption(option,prodName,prodCode,orderQty){
     const fl=m[1].replace(/시즌\d+/,'').trim();
     if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
   }
+  // "첫번째 맛:미숫가루맛 1통, 두번째 맛:미숫가루맛 1통" → 순서 키워드별 각 상품 (같은 맛도 각 1통)
+  const ordRe=/(?:첫번째|두번째|세번째|네번째|다섯번째)\s*맛\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+용기)?\s+(\d+)\s*통/g;
+  while((m=ordRe.exec(opt))!==null){
+    const fl=m[1].replace(/맛$/,'').replace(/시즌\d+/,'').trim();
+    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
+  }
   // 지그재그 "구분:딸기맛 450g 1통" → g 표기 우선, 없으면 sizeCtx
   const gudanRe=/구분\s*[:\s]+(\S+?)맛?\s*(?:(\d{2,4})\s*g\s*)?(\d+)\s*통/g;
   while((m=gudanRe.exec(opt))!==null){
