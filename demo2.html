@@ -245,7 +245,15 @@ function loadOneFile(f){
   if(OD_FILES.find(x=>x.name===f.name)){log(`⚠ 이미 로드됨: ${f.name}`,'w');return}
   readXL(f,wb=>{
     const sn=wb.SheetNames.find(s=>s.includes('주문')||s.includes('order'))||wb.SheetNames[0];
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
+    let rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
+    // HTML XLS 파일: SheetJS가 컬럼을 숫자 인덱스(0,1,2…)로 읽을 때 보정
+    // → 첫 행의 값을 헤더로 사용하여 재파싱
+    if(rows.length>0&&Object.keys(rows[0]).every(k=>!isNaN(k))){
+      const arr=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+      const hdrs=arr[0].map(h=>String(h).trim());
+      rows=arr.slice(1).map(r=>Object.fromEntries(hdrs.map((h,i)=>[h,r[i]??''])));
+      log(`HTML XLS 감지 → 헤더 재매핑 (${hdrs.join(', ')})`,'w');
+    }
     OD_FILES.push({name:f.name,rows});
     OD=OD_FILES.flatMap(x=>x.rows);
     updateOCard();
