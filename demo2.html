@@ -313,7 +313,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.2';
+const APP_VERSION='V3.3';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -609,7 +609,8 @@ function extractTokensToSKUs(addOptText, pname){
     const clean=stripNoise(tok);
     if(!clean)continue;
     if(/^(선택안함|선택\s*안함|선택없음|보틀\s*필요\s*없음|없음|-)$/.test(clean))continue;
-    if(/[\[\(]/.test(clean))continue;
+    // 색팩/세트 잔재(1+1, 5+2 등)만 skip — 사이즈 힌트 (450g)/(560g)/(7개입)은 통과
+    if(/\d\s*\+\s*\d/.test(clean))continue;
     const fl=normFlavor(clean);
     if(!fl)continue;
     const size=detectSize(clean, pname);
@@ -658,7 +659,8 @@ function parseOption(option, prodName, prodCode, orderQty){
     const menuM=src.match(/택\s*\d+\s*\([^)]*\)/);
     if(menuM)src=src.slice(src.indexOf(menuM[0])+menuM[0].length);
     src=stripFlavorMenu(src);
-    src=src.replace(/맛\s*선택\d*\s*[:=]/g,',');
+    // "맛 선택:" 라벨은 공백으로 치환 (사이즈 힌트 "식사대용(450g) 맛 선택: 미숫가루"가 한 세그먼트로 유지되도록)
+    src=src.replace(/맛\s*선택\d*\s*[:=]/g,' ');
     mainSkus=extractTokensToSKUs(src, pn);
   }
   const acc=new Map();
