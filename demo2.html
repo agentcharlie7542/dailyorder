@@ -438,11 +438,21 @@ function loadOneResultFile(f){
       log(`✕ ${f.name}: 필수 컬럼 누락 [${missing.join(', ')}] · 실제 헤더=${Object.keys(rows[0]).join(', ')}`,'e');
       return;
     }
+    // Forward-fill: 같은 묶음의 빈 행을 직전 값으로 채움
+    // (도구 출력 형식에서 묶음 첫 행만 vendor/vendorPn/option이 있고 나머지는 비어 있음)
+    let lastV='', lastPc='', lastPn='', lastOpt='';
+    let filled=0;
+    rows.forEach(r=>{
+      if(hdr.vendor){ if(r[hdr.vendor]) lastV=r[hdr.vendor]; else { r[hdr.vendor]=lastV; if(lastV)filled++; } }
+      if(hdr.vendorPc){ if(r[hdr.vendorPc]) lastPc=r[hdr.vendorPc]; else { r[hdr.vendorPc]=lastPc; } }
+      if(hdr.vendorPn){ if(r[hdr.vendorPn]) lastPn=r[hdr.vendorPn]; else { r[hdr.vendorPn]=lastPn; } }
+      if(hdr.option){ if(r[hdr.option]) lastOpt=r[hdr.option]; else { r[hdr.option]=lastOpt; } }
+    });
     RD_FILES.push({name:f.name,rows,hdr});
     RD=RD_FILES.flatMap(x=>x.rows.map(r=>({_src:x.name,_hdr:x.hdr,...r})));
     updateRsCard();
     const mode=hasKey?(hasPattern?'라인ID+패턴':'라인ID'):'패턴';
-    log(`+ ${f.name}: ${rows.length}행 정답 (${mode}) · orderNo=${hdr.orderNo||'∅'}, itemNo=${hdr.itemNo||'∅'}, vendorPn=${hdr.vendorPn||'∅'}, option=${hdr.option||'∅'}, skuCode=${hdr.skuCode}, qty=${hdr.qty} → 총 ${RD.length}행`,'ok');
+    log(`+ ${f.name}: ${rows.length}행 정답 (${mode}) · forward-fill ${filled}행 · orderNo=${hdr.orderNo||'∅'}, itemNo=${hdr.itemNo||'∅'}, vendorPn=${hdr.vendorPn||'∅'}, option=${hdr.option||'∅'}, skuCode=${hdr.skuCode}, qty=${hdr.qty} → 총 ${RD.length}행`,'ok');
     chk();
   });
 }
@@ -1192,114 +1202,88 @@ function runDiff(){
   const SKU_REV=buildSkuReverseIndex();
   DIFF=[];
 
-  // 1) 자동 결과 집계: (orderKey, skuCode) → qty
-  // 같은 키 안의 동일 SKU 행은 수량 합산 (중복 행 대비)
-  const autoMap=new Map();
-  const autoCtx=new Map(); // orderKey → {vendor,pcode,pName,opt,mgmt}
+  // 1) 자동 결과 묶음 집계: (정규화 상품명 + 옵션) 키
+  const autoBuckets=new Map(); // bk → {skus: Map(sku→qty), ctx}
   MR.forEach(r=>{
-    const k=r._orderKey;
-    if(!autoCtx.has(k)){
-      const head=MR.find(x=>x._orderKey===k&&x._m);
-      autoCtx.set(k,head?{v:head.v,pc:head.pc,pn:head.pn,opt:head.opt,mg:head.mg||k,no:head._orderNo}:{v:'',pc:'',pn:'',opt:'',mg:k,no:''});
-    }
-    const mk=k+'||'+padCode(r.sc);
-    autoMap.set(mk,(autoMap.get(mk)||0)+(Number(r.q)||0));
+    const head=r._m?r:MR.find(x=>x._orderKey===r._orderKey&&x._m);
+    if(!head)return;
+    const pnN=normPnJS(head.pn||'');
+    const optN=normOptJS(head.opt||'',head.pn||'');
+    const bk=pnN+'|||'+optN;
+    if(!autoBuckets.has(bk))autoBuckets.set(bk,{skus:new Map(),ctx:{v:head.v,pc:head.pc,pn:head.pn,opt:head.opt,pnNorm:pnN,optNorm:optN,mg:head.mg||head._orderKey,no:head._orderNo}});
+    const g=autoBuckets.get(bk);
+    const sc=padCode(r.sc);
+    g.skus.set(sc,(g.skus.get(sc)||0)+(Number(r.q)||0));
   });
 
-  // 2) 정답 결과 집계: (orderKey, skuCode) → qty
-  // 정답 키 우선순위: 품목별주문번호 > 주문번호
-  const truthMap=new Map();
-  const truthCtx=new Map();
+  // 2) 정답 결과 묶음 집계 (forward-fill 적용된 vendorPn + option)
+  const truthBuckets=new Map();
   RD.forEach(r=>{
     const h=r._hdr;
-    const itemNo=h.itemNo?String(r[h.itemNo]||'').trim():'';
-    const orderNo=h.orderNo?String(r[h.orderNo]||'').trim():'';
-    const k=itemNo||orderNo;
-    if(!k)return;
+    const vpn=h.vendorPn?String(r[h.vendorPn]||'').trim():'';
+    const vopt=h.option?String(r[h.option]||'').trim():'';
+    const vd=h.vendor?String(r[h.vendor]||'').trim():'';
+    const vpc=h.vendorPc?String(r[h.vendorPc]||'').trim():'';
     const sc=padCode(r[h.skuCode]);
     if(!sc)return;
     const qty=Number(r[h.qty])||0;
-    if(!truthCtx.has(k)) truthCtx.set(k,{no:orderNo,item:itemNo});
-    const mk=k+'||'+sc;
-    truthMap.set(mk,(truthMap.get(mk)||0)+qty);
+    const pnN=normPnJS(vpn);
+    const optN=normOptJS(vopt,vpn);
+    const bk=pnN+'|||'+optN;
+    if(!truthBuckets.has(bk))truthBuckets.set(bk,{skus:new Map(),ctx:{v:vd,pc:vpc,pn:vpn,opt:vopt,pnNorm:pnN,optNorm:optN}});
+    const g=truthBuckets.get(bk);
+    g.skus.set(sc,(g.skus.get(sc)||0)+qty);
   });
 
-  // 3) 매칭 모드 결정: 자동의 _orderKey 와 정답의 키가 직접 겹치는지 확인
-  // 안 겹치면 주문번호(orderNo) 폴백 시도
-  const autoKeys=new Set([...autoMap.keys()].map(k=>k.split('||')[0]));
-  const truthKeys=new Set([...truthMap.keys()].map(k=>k.split('||')[0]));
-  const direct=[...autoKeys].filter(k=>truthKeys.has(k)).length;
-  let useOrderNo=false;
-  if(direct===0 && autoCtx.size){
-    // 폴백: 자동의 _orderNo 와 정답 키를 매칭 시도
-    const anyNoMatch=[...autoCtx.values()].some(c=>c.no&&truthKeys.has(c.no));
-    if(anyNoMatch){useOrderNo=true;log('대조 키 폴백: 자동 주문번호 ↔ 정답 키','w')}
-  }
-
-  // 4) 자동의 키를 정답 키 공간으로 변환
-  const remapAuto=new Map(); // newKey||sc → qty
-  const remapCtx=new Map();  // newKey → ctx
-  autoMap.forEach((q,mk)=>{
-    const [ok,sc]=mk.split('||');
-    const ctx=autoCtx.get(ok);
-    const nk=useOrderNo?(ctx&&ctx.no?ctx.no:ok):ok;
-    const nmk=nk+'||'+sc;
-    remapAuto.set(nmk,(remapAuto.get(nmk)||0)+q);
-    if(!remapCtx.has(nk)&&ctx)remapCtx.set(nk,ctx);
-  });
-
-  // 5) Diff 5종
-  const seenAuto=new Set();
-  truthMap.forEach((tq,mk)=>{
-    const [k,sc]=mk.split('||');
-    const aq=remapAuto.get(mk);
-    const ctx=remapCtx.get(k)||{v:'',pc:'',pn:'',opt:'',mg:k,no:''};
-    if(aq!==undefined){
-      seenAuto.add(mk);
-      if(aq===tq){
-        DIFF.push({kind:'MATCH',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:aq,truthQty:tq,...ctx});
-      }else{
-        DIFF.push({kind:'QTY_DIFF',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:aq,truthQty:tq,...ctx});
-      }
-    }else{
-      // 정답에는 있으나 자동에는 없음 → MISSING
-      // 단, 같은 (key, flavor) 다른 사이즈가 자동에 있으면 SIZE_DIFF
-      const truthInfo=SKU_REV[sc];
-      let sizeDiffMatch=null;
-      if(truthInfo){
-        for(const [amk,aq2] of remapAuto){
-          if(seenAuto.has(amk))continue;
-          const [ak,asc]=amk.split('||');
-          if(ak!==k)continue;
-          const ai=SKU_REV[asc];
-          if(ai&&ai.flavor===truthInfo.flavor&&ai.size!==truthInfo.size){
-            sizeDiffMatch={amk,asc,aq:aq2};
-            break;
+  // 3) Diff: 묶음 키 합집합 순회, 각 묶음 안에서 SKU별 수량 비교
+  const allKeys=new Set([...autoBuckets.keys(),...truthBuckets.keys()]);
+  allKeys.forEach(bk=>{
+    const a=autoBuckets.get(bk);
+    const t=truthBuckets.get(bk);
+    const ctx=(a&&a.ctx)||(t&&t.ctx)||{};
+    const allSkus=new Set([...(a?a.skus.keys():[]),...(t?t.skus.keys():[])]);
+    const rows=[...allSkus].map(sku=>({sku,aq:(a&&a.skus.get(sku))||0,tq:(t&&t.skus.get(sku))||0}));
+    // SIZE_DIFF 후처리: 같은 맛 다른 사이즈 한쌍 → 묶기
+    const consumed=new Set();
+    rows.forEach((rA,iA)=>{
+      if(consumed.has(iA))return;
+      if(rA.aq===0&&rA.tq>0){
+        const ti=SKU_REV[rA.sku];
+        if(!ti)return;
+        for(let iB=0;iB<rows.length;iB++){
+          if(consumed.has(iB)||iA===iB)continue;
+          const rB=rows[iB];
+          if(rB.aq>0&&rB.tq===0){
+            const bi=SKU_REV[rB.sku];
+            if(bi&&bi.flavor===ti.flavor&&bi.size!==ti.size){
+              consumed.add(iA);consumed.add(iB);
+              DIFF.push({kind:'SIZE_DIFF',key:bk,sc:rA.sku,sn:SKU_CATALOG_ALL[rA.sku]||'',autoSc:rB.sku,autoSn:SKU_CATALOG_ALL[rB.sku]||'',autoQty:rB.aq,truthQty:rA.tq,...ctx});
+              break;
+            }
           }
         }
       }
-      if(sizeDiffMatch){
-        seenAuto.add(sizeDiffMatch.amk);
-        DIFF.push({kind:'SIZE_DIFF',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoSc:sizeDiffMatch.asc,autoSn:SKU_CATALOG_ALL[sizeDiffMatch.asc]||'',autoQty:sizeDiffMatch.aq,truthQty:tq,...ctx});
-      }else{
-        DIFF.push({kind:'MISSING',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:0,truthQty:tq,...ctx});
+    });
+    rows.forEach((r,i)=>{
+      if(consumed.has(i))return;
+      if(r.aq>0&&r.tq>0){
+        if(r.aq===r.tq)DIFF.push({kind:'MATCH',key:bk,sc:r.sku,sn:SKU_CATALOG_ALL[r.sku]||'',autoQty:r.aq,truthQty:r.tq,...ctx});
+        else DIFF.push({kind:'QTY_DIFF',key:bk,sc:r.sku,sn:SKU_CATALOG_ALL[r.sku]||'',autoQty:r.aq,truthQty:r.tq,...ctx});
+      } else if(r.tq>0){
+        DIFF.push({kind:'MISSING',key:bk,sc:r.sku,sn:SKU_CATALOG_ALL[r.sku]||'',autoQty:0,truthQty:r.tq,...ctx});
+      } else if(r.aq>0){
+        DIFF.push({kind:'EXTRA',key:bk,sc:r.sku,sn:SKU_CATALOG_ALL[r.sku]||'',autoQty:r.aq,truthQty:0,...ctx});
       }
-    }
-  });
-  // 자동에만 있는 SKU → EXTRA
-  remapAuto.forEach((aq,mk)=>{
-    if(seenAuto.has(mk))return;
-    const [k,sc]=mk.split('||');
-    const ctx=remapCtx.get(k)||{v:'',pc:'',pn:'',opt:'',mg:k,no:''};
-    DIFF.push({kind:'EXTRA',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:aq,truthQty:0,...ctx});
+    });
   });
 
-  // 6) 요약 로그
+  // 4) 요약 로그
   const cnt={MATCH:0,QTY_DIFF:0,SIZE_DIFF:0,MISSING:0,EXTRA:0};
   DIFF.forEach(d=>{cnt[d.kind]++});
   const total=DIFF.length||1;
   const acc=(cnt.MATCH/total*100).toFixed(1);
-  log(`정답 대조: 자동 ${remapAuto.size}행 vs 정답 ${truthMap.size}행 · 키매칭 ${useOrderNo?'주문번호':'관리번호/품목별'}`,'i');
+  const inter=[...allKeys].filter(k=>autoBuckets.has(k)&&truthBuckets.has(k)).length;
+  log(`정답 대조: 자동 ${autoBuckets.size}묶음 vs 정답 ${truthBuckets.size}묶음 · 교집합 ${inter}묶음 · 키매칭=정규화(상품명+옵션)`,'i');
   log(`Diff: MATCH ${cnt.MATCH} / QTY_DIFF ${cnt.QTY_DIFF} / SIZE_DIFF ${cnt.SIZE_DIFF} / MISSING ${cnt.MISSING} / EXTRA ${cnt.EXTRA} · 정확도 ${acc}%`, cnt.MATCH===DIFF.length?'ok':'w');
 
   document.getElementById('d0').textContent=acc+'%';
