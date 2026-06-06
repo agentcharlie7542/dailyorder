@@ -910,34 +910,173 @@ function parseOption(option,prodName,prodCode,orderQty){
   return results;
 }
 
-// ── 내장 학습규칙 (링크 접근 시 항상 적용)
+// ── 옵션/상품명 정규화 (정답 기반 룰셋과 raw 모두에 동일 적용)
+function normTextJS(s){s=String(s||'');s=s.normalize?s.normalize('NFKC'):s;s=s.replace(/\u00a0/g,' ').replace(/\u200b/g,'');s=s.replace(/\s+/g,' ').trim();return s}
+function normPnJS(s){s=normTextJS(s);s=s.replace(/<[^>]*>/g,' ');s=s.replace(/\s+/g,' ').trim();return s}
+function normOptJS(s,pname){
+  s=normTextJS(s);
+  s=s.replace(/<[^>]*>/g,' ');
+  s=s.replace(/\s+/g,' ').trim();
+  s=s.replace(/\(-?\d+%[▼▲]?\)/g,'');
+  s=s.replace(/\)([\uAC00-\uD7A3A-Za-z])/g,') $1');
+  s=s.replace(/(선택안함|선택 안함)([\uAC00-\uD7A3A-Za-z])/g,'$1 $2');
+  s=s.replace(/(\d개)([\uAC00-\uD7A3A-Za-z])/g,'$1 $2');
+  if(pname){var pn=normPnJS(pname);if(pn&&s.startsWith(pn))s=s.slice(pn.length).trim()}
+  s=s.replace(/\s+/g,' ').trim();
+  s=s.replace(/패키지선택/g,'패키지 선택');
+  s=s.replace(/\s*=\s*/g,'=');
+  s=s.replace(/\s*,\s*/g,', ');
+  return s.trim();
+}
+
+// ── 내장 학습규칙 (정답파일 20260605 기반 145개)
 const BUILTIN_RULES=[
-  {pattern:"특가:신규맛말차초코쿠키 포켓 1포",target:"option",results:[{code:"00022",qty:1},{code:"00062",qty:1}]},
-  {pattern:"밀잇 식단관리 단백질 쉐이크 멜론맛 560g",target:"both",results:[{code:"00004",qty:1}]},
-  {pattern:"패키지 선택=30개-스테디셀러팩(시리얼5+말차5+초코5+커피5+바나나5+피스타5)",target:"option",results:[{code:"00017",qty:5},{code:"00021",qty:5},{code:"00011",qty:5},{code:"00015",qty:5},{code:"00009",qty:5},{code:"00019",qty:5}]},
-  {pattern:"필수 선택=커피맛 1포 990원",target:"option",results:[{code:"00015",qty:1}]},
-  {pattern:"필수 옵션=딱 일주일 루틴팩 1세트 (7개입 / 개당 3357원) (32%▼), ★오직 여기서만! 단독 특가=선택안함맛 선택=흑임자맛 세트 (7개입) 1개",target:"option",results:[{code:"00053",qty:1}]},
-  {pattern:"밀잇 단백질 쉐이크 딸기맛 1통 특가",target:"both",results:[{code:"00002",qty:1}]},
-  {pattern:"밀잇 단백질 쉐이크 초코바나나맛 2통",target:"both",results:[{code:"00013",qty:2}]},
-  {pattern:"밀잇 단백질 쉐이크 미숫가루맛 2통",target:"both",results:[{code:"00006",qty:2}]},
-  {pattern:"[도민이] 쿠앤크+미숫가루+흑임자 낱개 3종",target:"both",results:[{code:"00023",qty:1},{code:"00005",qty:1},{code:"00025",qty:1}]},
-  {pattern:"1개, 560g",target:"both",results:[{code:"00004",qty:1}]},
-  {pattern:"패키지 선택=01. 도민이 픽은 이렇습니다(시리얼 1통+시리얼 7개입+흑임자 7개입+포켓랜덤증정)-",target:"both",results:[{code:"00018",qty:1},{code:"00058",qty:1},{code:"00025",qty:1},{code:"00021",qty:1}]},
-  {pattern:"패키지 선택=01. 도민이 픽은 이렇습니다(시리얼 1통+시리얼 7개입+흑임자 7개입+포켓랜덤증정)맛 선택=-",target:"both",results:[{code:"00018",qty:1},{code:"00017",qty:1},{code:"00025",qty:1},{code:"00021",qty:1}]},
-  {pattern:"패키지 선택=02. 7개입 3개초코_7개 3개",target:"both",results:[{code:"00062",qty:3}]},
-  {pattern:"맛 선택1:말차초코쿠키 1통,맛 선택2:시리얼 1통",target:"option",results:[{code:"00035",qty:1},{code:"00022",qty:1},{code:"00018",qty:1}]},
-  {pattern:"맛 선택1:시리얼 1통,맛 선택2:쿠키앤크림 1통",target:"option",results:[{code:"00035",qty:1},{code:"00018",qty:1},{code:"00024",qty:1}]},
-  {pattern:"맛 선택1:초콜릿 1통,맛 선택2:시리얼 1통",target:"option",results:[{code:"00035",qty:1},{code:"00012",qty:1},{code:"00018",qty:1}]},
-  {pattern:"맛 선택1:초콜릿 1통,맛 선택2:흑임자 560g 1통",target:"option",results:[{code:"00035",qty:1},{code:"00012",qty:1},{code:"00028",qty:1}]},
-  {pattern:"맛 선택1:커피 1통,맛 선택2:시리얼 1통",target:"option",results:[{code:"00035",qty:1},{code:"00016",qty:1},{code:"00018",qty:1}]},
-  {pattern:"맛 선택1:피스타치오 1통,맛 선택2:커피 1통",target:"option",results:[{code:"00035",qty:1},{code:"00020",qty:1},{code:"00016",qty:1}]},
-  {pattern:"전용 보틀 선택: 선택안함 / 맛 선택1: 피스타치오 1통 / 맛 선택2: 흑임자 시즌2 1통",target:"option",results:[{code:"00020",qty:1},{code:"00028",qty:1}]},
-  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=선택안함NEW 쿠키앤크림맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 초코맛 대용량 1개, 커피맛 대용량 1개",target:"option",results:[{code:"00024",qty:1},{code:"00028",qty:1},{code:"00022",qty:1},{code:"00012",qty:1},{code:"00016",qty:1}]},
-  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=선택안함NEW 쿠키앤크림맛 대용량 1개, 초코맛 대용량 3개, 커피맛 대용량 1개",target:"option",results:[{code:"00024",qty:1},{code:"00012",qty:3},{code:"00016",qty:1}]},
-  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=선택안함시리얼맛 대용량 2개, 피스타치오맛 대용량 3개",target:"option",results:[{code:"00018",qty:2},{code:"00020",qty:3}]},
-  {pattern:"패키지선택=대용량 5통+포켓 21개+보틀 증정 (-52%), ★오직 여기서만! 단독 특가=[5월단독특가] 딸기맛 식사대용 쉐이크 450g 1통 (9900원)NEW 쿠키앤크림맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 시리얼맛 대용량 1개, 피스타치오맛 대용량 1개, 초코맛 대용량 1개, 멜론맛 세트(7개입) 1개, 바나나맛 세트(7개입) 1개, 커피맛 세트(7개입) 1개",target:"option",results:[{code:"00035",qty:1},{code:"00002",qty:1},{code:"00024",qty:1},{code:"00022",qty:1},{code:"00018",qty:1},{code:"00020",qty:1},{code:"00012",qty:1},{code:"00061",qty:1},{code:"00059",qty:1},{code:"00056",qty:1}]},
-  {pattern:"패키지선택=대용량 3+2통 (-51%), ★오직 여기서만! 단독 특가=[5월단독특가] 딸기맛 식사대용 쉐이크 450g 1통 (9900원)NEW 쿠키앤크림맛 대용량 1개, 시리얼맛 대용량 2개, 피스타치오맛 대용량 1개, 초코맛 대용량 1개",target:"option",results:[{code:"00002",qty:1},{code:"00024",qty:1},{code:"00018",qty:2},{code:"00020",qty:1},{code:"00012",qty:1}]},
-];
+  {pattern:"패키지 선택=30개-스테디셀러팩(시리얼5+말차5+초코5+커피5+바나나5+피스타5)",target:"all",productName:"밀잇 식단관리 포켓 단백질 쉐이크 낱포 20/30 골라담기",results:[{code:"00009",qty:5},{code:"00011",qty:5},{code:"00015",qty:5},{code:"00017",qty:5},{code:"00019",qty:5},{code:"00021",qty:5}]},
+  {pattern:"패키지 선택=02. 7개 입 3개 딸기맛_7개 1개, 쿠키앤크림_7개 1개, 미숫가루_7개 1개",target:"all",productName:"TEST [쪼끔이] 단백질 쉐이크 특별 할인전",results:[{code:"00055",qty:1},{code:"00060",qty:1},{code:"00063",qty:1}]},
+  {pattern:"패키지 선택=03. 4통+보틀, 딸기맛_대용량 4개",target:"all",productName:"TEST [쪼끔이] 단백질 쉐이크 특별 할인전",results:[{code:"00035",qty:1},{code:"00036",qty:4}]},
+  {pattern:"패키지 선택=03. 2통+보틀, 딸기맛_대용량 2개",target:"all",productName:"TEST [쪼끔이] 단백질 쉐이크 특별 할인전",results:[{code:"00035",qty:1},{code:"00036",qty:2}]},
+  {pattern:"사은품 포켓 낱개 1개입 (맛 랜덤)+식단관리 쉐이크 대용량(맛 랜덤)",target:"name",productName:"사은품 포켓 낱개 1개입 (맛 랜덤)+식단관리 쉐이크 대용량(맛 랜덤)",results:[{code:"00008",qty:1},{code:"00023",qty:1}]},
+  {pattern:"패키지 선택=03. 4통+보틀, 딸기맛_대용량 1개, 쿠키앤크림_대용량 1개, 미숫가루_대용량 1개, 흑임자_대용량 1개",target:"all",productName:"[쪼끔이] 단백질 쉐이크 특별 할인전",results:[{code:"00008",qty:1},{code:"00024",qty:1},{code:"00028",qty:1},{code:"00035",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=02. 7개 입 2개 딸기맛_7개 1개, 쿠키앤크림_7개 1개",target:"all",productName:"[쪼끔이] 단백질 쉐이크 특별 할인전",results:[{code:"00055",qty:1},{code:"00063",qty:1}]},
+  {pattern:"밀잇 식단관리 단백질 쉐이크 멜론맛 560g 2통 + 전용 보틀 350ml 1개 증정",target:"name",productName:"밀잇 식단관리 단백질 쉐이크 멜론맛 560g 2통 + 전용 보틀 350ml 1개 증정",results:[{code:"00004",qty:2},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=20개-뉴4색팩(말차4+시리얼4+피스타4+초코4+커피4)",target:"all",productName:"밀잇 식단관리 포켓 단백질 쉐이크 낱포 20/30 골라담기",results:[{code:"00011",qty:4},{code:"00015",qty:4},{code:"00017",qty:4},{code:"00019",qty:4},{code:"00021",qty:4}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 쿠키앤크림맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 말차초코쿠키맛 대용량 1개, 커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00016",qty:1},{code:"00022",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00022",qty:1},{code:"00024",qty:1},{code:"00028",qty:1},{code:"00035",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+2통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 초코맛 대용량 1개, 바나나맛 대용량 1개, 커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00010",qty:1},{code:"00012",qty:1},{code:"00016",qty:1},{code:"00024",qty:1}]},
+  {pattern:"밀잇 딸기맛 40g",target:"name",productName:"밀잇 딸기맛 40g",results:[{code:"00001",qty:1}]},
+  {pattern:"패키지 선택=02. 7개 입 3개 딸기맛_7개 3개",target:"all",productName:"TEST [쪼끔이] 단백질 쉐이크 특별 할인전",results:[{code:"00063",qty:1}]},
+  {pattern:"2개, 450g",target:"all",productName:"밀잇 식사대용 단백질 쉐이크 흑임자맛 (+전용 보틀 증정)",results:[{code:"00026",qty:2},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=삼색 키트 [3통] [무료배송], ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 미숫가루 1개, 흑임자 1개, 초코바나나 1개",target:"all",productName:"밀잇 식사대용 단백질 쉐이크",results:[{code:"00006",qty:1},{code:"00013",qty:1},{code:"00026",qty:1},{code:"00035",qty:1}]},
+  {pattern:"필수 옵션=3주 루틴ON 플랜 3세트 (21개 입 / 개당 3185원) (무료배송), ★오직 여기서만! 단독 특가=선택안함 흑임자맛 세트 (7개 입) 3개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00053",qty:3}]},
+  {pattern:"필수 옵션=스타터팩 올인원팩 16개 입 [피스타(2) 초코(2) 시리얼(2) 미숫가루(2) 말차(1) 쿠앤크(1) 바나나(1) 멜론(1) 흑임자(2) 커피(2)], ★오직 여기서만! 단독 특가=[혈당DOWN] 애사비 젤리컷 8000mg 15포 (16900원) 맛 선택=-",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00003",qty:1},{code:"00005",qty:2},{code:"00009",qty:1},{code:"00011",qty:2},{code:"00015",qty:2},{code:"00017",qty:2},{code:"00019",qty:2},{code:"00021",qty:1},{code:"00023",qty:1},{code:"00025",qty:2},{code:"00033",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) UPGRADE 흑임자맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00028",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00016",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 말차초코쿠키맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00022",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=[입문자 추천] 포켓형 단백질 쉐이크 스타터팩 7종 (19900원) NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:1},{code:"00036",qty:1},{code:"00064",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=쿠키앤크림맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:2}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 쿠키앤크림맛 대용량 2개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00024",qty:2},{code:"00028",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 시리얼맛 대용량 1개, 피스타치오맛 대용량 2개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00012",qty:1},{code:"00018",qty:1},{code:"00020",qty:2}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00024",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+2통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=UPGRADE 흑임자맛 대용량 3개, 피스타치오맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:2},{code:"00028",qty:3}]},
+  {pattern:"맛(7개 입) 선택1: 시리얼 7개 입 / 맛(7개 입) 선택2: 시리얼 7개 입",target:"all",productName:"밀잇 단백질쉐이크 파우치 2주플랜 14개입 피스타치오맛 외 4가지맛 식단관리 프로틴 파우더",results:[{code:"00058",qty:2}]},
+  {pattern:"맛(7개 입) 선택: 쿠키앤크림 7개 입",target:"all",productName:"밀잇 단백질 쉐이크 파우치 7개입 초코맛 외 10가지맛 식단관리 프로틴 파우더 한끼 보충제",results:[{code:"00055",qty:1}]},
+  {pattern:"맛 선택1:초콜릿 1통, 맛 선택2:초콜릿 1통",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g x 2통, 28회분",results:[{code:"00012",qty:2}]},
+  {pattern:"피스타치오 대용량 1통/시리얼 대용량 1통/전용 보틀 1개 (3000원)",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g 11종 택2 (미숫가루맛, 초코맛, 말차초코쿠키맛, 시리얼맛, 피스타치오맛)",results:[{code:"00018",qty:1},{code:"00020",qty:1},{code:"00035",qty:1}]},
+  {pattern:"[스타터팩] 밀잇 단백질 쉐이크 포켓형 11가지맛 세트",target:"name",productName:"[스타터팩] 밀잇 단백질 쉐이크 포켓형 11가지맛 세트",results:[{code:"00086",qty:1}]},
+  {pattern:"밀잇 흑임자맛 450g",target:"name",productName:"밀잇 흑임자맛 450g",results:[{code:"00026",qty:1}]},
+  {pattern:"밀잇 시리얼맛 560g",target:"name",productName:"밀잇 시리얼맛 560g",results:[{code:"00018",qty:1}]},
+  {pattern:"밀잇 단백질 쉐이크 포켓형 시리얼맛 40g",target:"name",productName:"밀잇 단백질 쉐이크 포켓형 시리얼맛 40g",results:[{code:"00017",qty:1}]},
+  {pattern:"흑임자+바나나",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00010",qty:1},{code:"00028",qty:1}]},
+  {pattern:"흑임자+미숫가루",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00008",qty:1},{code:"00028",qty:1}]},
+  {pattern:"미숫가루+말차초코쿠키",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00008",qty:1},{code:"00022",qty:1}]},
+  {pattern:"미숫가루+시리얼",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00008",qty:1},{code:"00018",qty:1}]},
+  {pattern:"흑임자+피스타치오",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00020",qty:1},{code:"00028",qty:1}]},
+  {pattern:"미숫가루 2통",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00008",qty:2}]},
+  {pattern:"450g초코바나나 | 560g말차초코쿠키",target:"all",productName:"[B000000231974] 밀잇 식사대용 단백질쉐이크 450g + 식단관리 단백질쉐이크 560g 14종 택2",results:[{code:"00013",qty:1},{code:"00022",qty:1}]},
+  {pattern:"말차초코쿠키+초코",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00012",qty:1},{code:"00022",qty:1}]},
+  {pattern:"말차초코쿠키+시리얼",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00018",qty:1},{code:"00022",qty:1}]},
+  {pattern:"말차초코쿠키 2통",target:"all",productName:"[B000000228740] 밀잇 식단관리 단백질쉐이크 560g 10종 택2",results:[{code:"00022",qty:2}]},
+  {pattern:"抹茶巧克力脆片 7入裝",target:"all",productName:"【MEAL IT】MEAL IT 手搖高蛋白奶昔 (7包入) 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖 官方直營",results:[{code:"00062",qty:1}]},
+  {pattern:"草莓拿鐵 7入裝",target:"all",productName:"【MEAL IT】MEAL IT 手搖高蛋白奶昔 (7包入) 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖 官方直營",results:[{code:"00063",qty:1}]},
+  {pattern:"香醇咖啡 7入裝",target:"all",productName:"【MEAL IT】MEAL IT 手搖高蛋白奶昔 (7包入) 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖 官方直營",results:[{code:"00056",qty:1}]},
+  {pattern:"可可黑旋風 7入裝",target:"all",productName:"【MEAL IT】MEAL IT 手搖高蛋白奶昔 (7包入) 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖 官方直營",results:[{code:"00055",qty:1}]},
+  {pattern:"【MEAL IT】綜合口味10包入-MEAL IT 手搖高蛋白奶昔 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖",target:"name",productName:"【MEAL IT】綜合口味10包入-MEAL IT 手搖高蛋白奶昔 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖",results:[{code:"00066",qty:1}]},
+  {pattern:"香蕉巧克力 450g",target:"all",productName:"【MEAL IT】MEAL IT 高蛋白奶昔(家庭版450g) 韓國奶昔 代餐 分離蛋白 膳食纖維 低卡 減糖",results:[{code:"00013",qty:1}]},
+  {pattern:"필수 옵션=3주 루틴ON 플랜 3세트 (21개 입 / 개당 3185원) (무료배송), ★오직 여기서만! 단독 특가=선택안함 맛 선택=시리얼맛 세트(7개 입) 1개, 피스타치오맛 세트(7개 입) 1개, 초코맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00054",qty:1},{code:"00057",qty:1},{code:"00058",qty:1}]},
+  {pattern:"필수 옵션=2주 꾸준함 챌린지 2세트 (14개 입 / 개당 3392원) (무료배송), ★오직 여기서만! 단독 특가=선택안함 딸기맛 세트(7개 입) 1개, 쿠키앤크림맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00055",qty:1},{code:"00063",qty:1}]},
+  {pattern:"필수 옵션=5주 리셋 프로그램 4+1세트 (35개 입 / 개당 2997원) (무료배송), ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 세트(7개 입) 1개, 미숫가루맛 세트(7개 입) 1개, 시리얼맛 세트(7개 입) 1개, 초코맛 세트(7개 입) 1개, 커피맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00055",qty:1},{code:"00056",qty:1},{code:"00057",qty:1},{code:"00058",qty:1},{code:"00060",qty:1}]},
+  {pattern:"필수 옵션=스타터팩 올인원팩 16개 입 [피스타(2) 초코(2) 시리얼(2) 미숫가루(2) 말차(1) 쿠앤크(1) 바나나(1) 멜론(1) 흑임자(2) 커피(2)], ★오직 여기서만! 단독 특가=선택안함 -",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00003",qty:1},{code:"00005",qty:2},{code:"00009",qty:1},{code:"00011",qty:2},{code:"00015",qty:2},{code:"00017",qty:2},{code:"00019",qty:2},{code:"00021",qty:1},{code:"00023",qty:1},{code:"00025",qty:2}]},
+  {pattern:"필수 옵션=스타터팩 10개 입 [피스타 멜론 초코 커피 바나나 말차 시리얼 미숫가루 흑임자 쿠앤크 각1포씩], ★오직 여기서만! 단독 특가=[혈당DOWN] 애사비 젤리컷 8000mg 15포 (16900원) 맛 선택=-",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00033",qty:1},{code:"00066",qty:1}]},
+  {pattern:"필수 옵션=스타터팩 10개 입 [피스타 멜론 초코 커피 바나나 말차 시리얼 미숫가루 흑임자 쿠앤크 각1포씩], ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) -",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00035",qty:1},{code:"00066",qty:1}]},
+  {pattern:"필수 옵션=7주 바디 체인지 5+2세트 (49개 입 / 개당 2855원) (무료배송), ★오직 여기서만! 단독 특가=선택안함 딸기맛 세트(7개 입) 2개, 쿠키앤크림맛 세트(7개 입) 1개, 흑임자맛 세트 (7개 입) 1개, 시리얼맛 세트(7개 입) 1개, 멜론맛 세트(7개 입) 1개, 바나나맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00053",qty:1},{code:"00055",qty:1},{code:"00058",qty:1},{code:"00059",qty:1},{code:"00061",qty:1},{code:"00063",qty:2}]},
+  {pattern:"패키지 선택=든든 키트 [3+1통 /포켓 피스타치오+초코 2포 증정] [무료배송], ★오직 여기서만! 단독 특가=선택안함 미숫가루 4개",target:"all",productName:"밀잇 식사대용 단백질 쉐이크",results:[{code:"00006",qty:4},{code:"00011",qty:1},{code:"00019",qty:1}]},
+  {pattern:"필수 옵션=스타터팩 5개 입 [피스타 멜론 초코 커피 바나나 각1포씩], ★오직 여기서만! 단독 특가=[입문자 추천] 포켓형 단백질 쉐이크 스타터팩 7종 (19900원) 맛 선택=-",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 포켓형",results:[{code:"00064",qty:1},{code:"00065",qty:1}]},
+  {pattern:"필수 옵션=560g 3+1통 UPGRADE 흑임자맛 대용량 2개, 피스타치오맛 대용량 2개",target:"all",productName:"[3+1] 밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:2},{code:"00028",qty:2}]},
+  {pattern:"필수 옵션=560g 3+1통 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, 바나나맛 대용량 1개, 멜론맛 대용량 1개",target:"all",productName:"[3+1] 밀잇 식단관리 단백질 쉐이크",results:[{code:"00004",qty:1},{code:"00010",qty:1},{code:"00024",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=든든 키트 [3+1통 /포켓 피스타치오+초코 2포 증정] [무료배송], ★오직 여기서만! 단독 특가=선택안함 흑임자 4개",target:"all",productName:"밀잇 식사대용 단백질 쉐이크",results:[{code:"00011",qty:1},{code:"00019",qty:1},{code:"00026",qty:4}]},
+  {pattern:"1통, 560g",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 쿠키앤크림맛",results:[{code:"00024",qty:1}]},
+  {pattern:"1개, 560g",target:"all",productName:"[찐한 속세맛 식단] 밀잇 식단관리 단백질 쉐이크 멜론맛",results:[{code:"00004",qty:1}]},
+  {pattern:"2개, 560g",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 피스타치오 1통+멜론 1통 (+전용 보틀 증정)",results:[{code:"00004",qty:1},{code:"00020",qty:1},{code:"00035",qty:1}]},
+  {pattern:"2개, 560g",target:"all",productName:"밀잇 식단관리 단백질 쉐이크 피스타치오 1통+바나나 1통 (+전용 보틀 증정)",results:[{code:"00010",qty:1},{code:"00020",qty:1},{code:"00035",qty:1}]},
+  {pattern:"필수 옵션=560g 3+1통 NEW 딸기맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개",target:"all",productName:"[3+1] 밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00022",qty:1},{code:"00028",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=01. 다 먹어보고 싶을 땐 이것(스타터팩 10종+대용량 1통+포켓 랜덤 증정), 미숫가루_대용량 1개",target:"all",productName:"[고요비] 단백질 쉐이크 특별 할인전",results:[{code:"00008",qty:1},{code:"00023",qty:1},{code:"00066",qty:1}]},
+  {pattern:"패키지 선택=30개-패밀리팩(시리얼6+바나나6+멜론6+피스타6+초코6)",target:"all",productName:"밀잇 식단관리 포켓 단백질 쉐이크 낱포 20/30 골라담기",results:[{code:"00003",qty:6},{code:"00009",qty:6},{code:"00011",qty:6},{code:"00017",qty:6},{code:"00019",qty:6}]},
+  {pattern:"패키지 선택=7+7+7+7+7+7 6주플랜 [개당 2833원] 초코맛 세트(7개 입) 6개",target:"all",productName:"밀잇 식단관리 포켓형 단백질 쉐이크 3주플랜 7+7+7",results:[{code:"00057",qty:6}]},
+  {pattern:"패키지 선택=7+7+7 3주플랜 [개당 3090원] 맛 선택=쿠키앤크림맛 세트(7개 입) 1개, 흑임자맛 세트(7개 입) 1개, 시리얼맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 포켓형 단백질 쉐이크 3주플랜 7+7+7",results:[{code:"00053",qty:1},{code:"00055",qty:1},{code:"00058",qty:1}]},
+  {pattern:"패키지 선택=7+7+7 3주플랜 [개당 3090원] 딸기맛 세트(7개 입) 1개, 시리얼맛 세트(7개 입) 1개, 바나나맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 포켓형 단백질 쉐이크 3주플랜 7+7+7",results:[{code:"00058",qty:1},{code:"00059",qty:1},{code:"00063",qty:1}]},
+  {pattern:"패키지 선택=7+7+7 3주플랜 [개당 3090원] 딸기맛 세트(7개 입) 1개, 미숫가루맛 세트(7개 입) 1개, 말차초코쿠키맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 포켓형 단백질 쉐이크 3주플랜 7+7+7",results:[{code:"00060",qty:1},{code:"00062",qty:1},{code:"00063",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) NEW 딸기맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00035",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=쿠키앤크림맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1}]},
+  {pattern:"패키지 선택=대용량 1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=NEW 딸기맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=[혈당DOWN] 애사비 젤리컷 8000mg 15포 (16900원) 맛 선택=NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:1},{code:"00033",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 맛 선택=쿠키앤크림맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00012",qty:1},{code:"00024",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 맛 선택=말차초코쿠키맛 대용량 1개, 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1},{code:"00022",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 맛 선택=UPGRADE 흑임자맛 대용량 1개, 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1},{code:"00028",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 말차초코쿠키맛 대용량 1개, 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1},{code:"00022",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) UPGRADE 미숫가루맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=[입문자 추천] 포켓형 단백질 쉐이크 스타터팩 7종 (19900원) 쿠키앤크림맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00012",qty:1},{code:"00024",qty:1},{code:"00064",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:2}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=쿠키앤크림맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1},{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=쿠키앤크림맛 대용량 1개, 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1},{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=말차초코쿠키맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1},{code:"00022",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=UPGRADE 흑임자맛 대용량 1개, 커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00016",qty:1},{code:"00028",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=NEW 딸기맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00028",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 UPGRADE 미숫가루맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00020",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 UPGRADE 미숫가루맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00036",qty:2}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00024",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00012",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 말차초코쿠키맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00022",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 쿠키앤크림맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1},{code:"00022",qty:1},{code:"00024",qty:1},{code:"00028",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 시리얼맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00018",qty:1},{code:"00020",qty:1},{code:"00024",qty:1},{code:"00028",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 피스타치오맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00020",qty:1},{code:"00022",qty:1},{code:"00024",qty:1},{code:"00028",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 초코맛 대용량 1개, 커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00016",qty:1},{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00024",qty:1},{code:"00028",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00018",qty:1},{code:"00024",qty:1},{code:"00028",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 UPGRADE 흑임자맛 대용량 2개, 피스타치오맛 대용량 1개, 커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00016",qty:1},{code:"00020",qty:1},{code:"00028",qty:2}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 UPGRADE 미숫가루맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 초코맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:2},{code:"00022",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 2개, UPGRADE 미숫가루맛 대용량 1개, 말차초코쿠키맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00022",qty:1},{code:"00036",qty:2}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 피스타치오맛 대용량 1개, 바나나맛 대용량 1개, 멜론맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00004",qty:1},{code:"00010",qty:1},{code:"00020",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 2개, 바나나맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00010",qty:1},{code:"00024",qty:2},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 초코맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00024",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 시리얼맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00018",qty:1},{code:"00024",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+1통, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00024",qty:1},{code:"00028",qty:1},{code:"00036",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+2통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) UPGRADE 미숫가루맛 대용량 2개, UPGRADE 흑임자맛 대용량 1개, 시리얼맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:2},{code:"00018",qty:2},{code:"00028",qty:1},{code:"00035",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+2통, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 2개, 피스타치오맛 대용량 1개, 커피맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:2},{code:"00016",qty:1},{code:"00020",qty:1},{code:"00024",qty:1}]},
+  {pattern:"패키지 선택=대용량 3+2통, ★오직 여기서만! 단독 특가=선택안함 맛 선택=NEW 딸기맛 대용량 2개, 쿠키앤크림맛 대용량 1개, 초코맛 대용량 2개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00012",qty:2},{code:"00024",qty:1},{code:"00036",qty:2}]},
+  {pattern:"패키지 선택=대용량 5통+포켓 21개+보틀증정, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) 맛 선택=쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 시리얼맛 대용량 1개, 멜론맛 대용량 1개, NEW 딸기맛 세트(7개 입) 1개, 시리얼맛 세트(7개 입) 1개, 멜론맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00004",qty:1},{code:"00008",qty:1},{code:"00018",qty:1},{code:"00024",qty:1},{code:"00028",qty:1},{code:"00035",qty:2},{code:"00058",qty:1},{code:"00061",qty:1},{code:"00063",qty:1}]},
+  {pattern:"패키지 선택=대용량 5통+포켓 21개+보틀증정, ★오직 여기서만! 단독 특가=선택안함 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, 시리얼맛 대용량 1개, 초코맛 대용량 1개, 커피맛 대용량 1개, 시리얼맛 세트(7개 입) 1개, 초코맛 세트(7개 입) 1개, 커피맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00016",qty:1},{code:"00018",qty:1},{code:"00024",qty:1},{code:"00035",qty:1},{code:"00056",qty:1},{code:"00057",qty:1},{code:"00058",qty:1}]},
+  {pattern:"패키지 선택=대용량 5통+포켓 21개+보틀증정, ★오직 여기서만! 단독 특가=선택안함 맛 선택=UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 시리얼맛 대용량 1개, 피스타치오맛 대용량 1개, 초코맛 대용량 1개, 쿠키앤크림맛 세트(7개 입) 1개, 미숫가루맛 세트(7개 입) 1개, 흑임자맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00012",qty:1},{code:"00018",qty:1},{code:"00020",qty:1},{code:"00028",qty:1},{code:"00035",qty:1},{code:"00053",qty:1},{code:"00055",qty:1},{code:"00060",qty:1}]},
+  {pattern:"패키지 선택=대용량 5통+포켓 21개+보틀증정, ★오직 여기서만! 단독 특가=선택안함 NEW 딸기맛 대용량 1개, 쿠키앤크림맛 대용량 1개, UPGRADE 미숫가루맛 대용량 1개, UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개, 피스타치오맛 세트(7개 입) 1개, 멜론맛 세트(7개 입) 1개, 커피맛 세트(7개 입) 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00008",qty:1},{code:"00022",qty:1},{code:"00024",qty:1},{code:"00028",qty:1},{code:"00035",qty:1},{code:"00036",qty:1},{code:"00054",qty:1},{code:"00056",qty:1},{code:"00061",qty:1}]},
+  {pattern:"패키지 선택=대용량 1+1통, ★오직 여기서만! 단독 특가=트라이탄 쉐이커 보틀 350ml (2900원) UPGRADE 흑임자맛 대용량 1개, 말차초코쿠키맛 대용량 1개",target:"all",productName:"밀잇 식단관리 단백질 쉐이크",results:[{code:"00022",qty:1},{code:"00028",qty:1},{code:"00035",qty:1}]},
+  {pattern:"맛: 미숫가루, 전용 보틀: 밀잇 전용 친환경 보틀 350ml",target:"all",productName:"밀잇 식사대용 단백질 쉐이크 4종 택1 (전용 보틀증정)",results:[{code:"00006",qty:1},{code:"00035",qty:2}]},
+  {pattern:"밀잇 식단관리 단백질 쉐이크 포켓형 미숫가루맛, 40g, 7개",target:"name",productName:"밀잇 식단관리 단백질 쉐이크 포켓형 미숫가루맛, 40g, 7개",results:[{code:"00060",qty:1}]},
+  {pattern:"전용 보틀 선택: 전용 보틀 1개 / 맛 선택1: 피스타치오 1통 / 맛 선택2: 초콜릿 1통",target:"all",productName:"[오직 단 하루] 밀잇 식단관리 단백질 쉐이크 560g 1+1",results:[{code:"00012",qty:1},{code:"00020",qty:1},{code:"00035",qty:1}]},
+  {pattern:"전용 보틀 선택: 선택안함 / 맛 선택1: 쿠키앤크림 1통 / 맛 선택2: 초콜릿 1통",target:"all",productName:"[오직 단 하루] 밀잇 식단관리 단백질 쉐이크 560g 1+1",results:[{code:"00012",qty:1},{code:"00024",qty:1}]},
+  {pattern:"전용 보틀 선택: 선택안함 / 맛 선택1: 말차초코쿠키 1통 / 맛 선택2: 말차초코쿠키 1통",target:"all",productName:"[오직 단 하루] 밀잇 식단관리 단백질 쉐이크 560g 1+1",results:[{code:"00022",qty:2}]},
+  {pattern:"맛(7개 입) 선택: 흑임자 7개 입",target:"all",productName:"밀잇 단백질 쉐이크 파우치 7개입 초코맛 외 10가지맛 식단관리 프로틴 파우더 한끼 보충제",results:[{code:"00053",qty:1}]},
+  {pattern:"맛(7개 입) 선택: 시리얼 7개 입",target:"all",productName:"밀잇 단백질 쉐이크 파우치 7개입 초코맛 외 10가지맛 식단관리 프로틴 파우더 한끼 보충제",results:[{code:"00058",qty:1}]},
+  {pattern:"맛(7개 입) 선택: 딸기맛 7개 입",target:"all",productName:"밀잇 단백질 쉐이크 파우치 7개입 초코맛 외 10가지맛 식단관리 프로틴 파우더 한끼 보충제",results:[{code:"00063",qty:1}]},
+  {pattern:"전용 보틀 선택: 선택안함 / 식사대용(450g) 맛 선택: 미숫가루 1통 / 식단관리(560g) 맛 선택: 시리얼 1통",target:"all",productName:"밀잇 단백질 쉐이크 초코맛 외 13종 2통 식단관리 식사대용 프로틴 대용량 보충제",results:[{code:"00006",qty:1},{code:"00018",qty:1}]},
+  {pattern:"식단관리 1통:피스타치오 대용량 1통, 식사대용 1통:초코바나나 1통",target:"all",productName:"[1+1] 밀잇 식단관리 식사대용 단백질 쉐이크 560g 450g x 2통, 29회분",results:[{code:"00013",qty:1},{code:"00020",qty:1}]},
+  {pattern:"맛 선택1:흑임자 560g 1통, 맛 선택2:쿠키앤크림 1통",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g x 2통, 28회분",results:[{code:"00024",qty:1},{code:"00028",qty:1}]},
+  {pattern:"맛 선택1:커피 1통, 맛 선택2:딸기 560g 1통",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g x 2통, 28회분",results:[{code:"00016",qty:1},{code:"00036",qty:1}]},
+  {pattern:"맛 선택1:시리얼 1통, 맛 선택2:쿠키앤크림 1통",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g x 2통, 28회분",results:[{code:"00018",qty:1},{code:"00024",qty:1}]},
+  {pattern:"맛 선택1:멜론 1통, 맛 선택2:피스타치오 1통",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g x 2통, 28회분",results:[{code:"00004",qty:1},{code:"00020",qty:1}]},
+  {pattern:"피스타치오 대용량 1통/초콜릿 대용량 1통/선택 안함",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g 11종 택2 (미숫가루맛, 초코맛, 말차초코쿠키맛, 시리얼맛, 피스타치오맛)",results:[{code:"00012",qty:1},{code:"00020",qty:1}]},
+  {pattern:"시리얼 대용량 1통/시리얼 대용량 1통/선택 안함",target:"all",productName:"[1+1] 밀잇 식단관리 단백질 쉐이크 560g 11종 택2 (미숫가루맛, 초코맛, 말차초코쿠키맛, 시리얼맛, 피스타치오맛)",results:[{code:"00018",qty:2}]},
+  {pattern:"초콜릿 대용량 1통/선택안함",target:"all",productName:"[14회분] 밀잇 식단관리 단백질 쉐이크 560g 11종 택1 (미숫가루맛, 초코맛, 말차초코쿠키맛, 시리얼맛, 피스타치오맛)",results:[{code:"00012",qty:1}]},
+  {pattern:"밀잇 전용 트라이탄 보틀 350ml 1개/선택 없음",target:"all",productName:"밀잇 전용 트라이탄 보틀 350ml",results:[{code:"00035",qty:1}]}
+];;
 
 // ── 사용자 학습규칙
 function loadRules(){try{return JSON.parse(localStorage.getItem(CR_KEY)||'[]')}catch(e){return []}}
@@ -945,15 +1084,36 @@ function saveRules(rs){localStorage.setItem(CR_KEY,JSON.stringify(rs))}
 function applyCustomRules(productName,optionRaw,orderQty){
   const rules=[...BUILTIN_RULES,...loadRules()];
   const matched=[];
+  const pnNorm=normPnJS(productName);
+  const optNorm=normOptJS(optionRaw, productName);
+  const allNorm=pnNorm+' '+optNorm;
   rules.forEach(rule=>{
-    const haystack=rule.target==='option'?optionRaw:rule.target==='name'?productName:(productName+' '+optionRaw);
+    const target=rule.target||'all';
+    const hayRaw=target==='option'?optionRaw:target==='name'?productName:(productName+' '+optionRaw);
+    const hayNorm=target==='option'?optNorm:target==='name'?pnNorm:allNorm;
     let isMatch=false;
     try{
-      if(/^\/.+\/[gimsuy]*$/.test(rule.pattern)){const m=rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);isMatch=new RegExp(m[1],m[2]).test(haystack)}
-      else isMatch=haystack.toLowerCase().includes(rule.pattern.toLowerCase());
+      if(/^\/.+\/[gimsuy]*$/.test(rule.pattern)){
+        const m=rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);
+        const re=new RegExp(m[1],m[2]);
+        isMatch=re.test(hayRaw)||re.test(hayNorm);
+      } else {
+        const pat=rule.pattern;
+        const patLow=pat.toLowerCase();
+        isMatch = hayNorm===pat || hayNorm.toLowerCase().includes(patLow) || hayRaw.toLowerCase().includes(patLow);
+      }
     }catch(e){isMatch=false}
     if(!isMatch)return;
-    rule.results.forEach(r=>{const code=padCode(r.code);const name=SKU_CATALOG_ALL[code]||('코드 '+code);matched.push({c:code,n:name,q:r.qty*orderQty})});
+    // productName 매칭(룰셋 충돌 방지): 정답파일 룰이 productName을 지정한 경우 상품명도 일치해야 함
+    if(rule.productName){
+      const rpn=normPnJS(rule.productName);
+      if(pnNorm!==rpn)return;
+    }
+    rule.results.forEach(r=>{
+      const code=padCode(r.code);
+      const name=SKU_CATALOG_ALL[code]||('코드 '+code);
+      matched.push({c:code,n:name,q:r.qty*orderQty});
+    });
   });
   return matched;
 }
