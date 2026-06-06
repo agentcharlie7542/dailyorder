@@ -281,6 +281,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 <div class="acts">
 <button class="btn btn-g" onclick="addRule()">＋ 학습규칙 추가</button>
+<button class="btn btn-y" id="learnAllTruthBtn" onclick="learnAllFromTruth()" disabled>📥 정답 파일 → 규칙 등록</button>
 <button class="btn btn-o" onclick="exportRules()">📤 내보내기</button>
 <button class="btn btn-o" onclick="document.getElementById('cr_import').click()">📥 가져오기</button>
 <input type="file" id="cr_import" accept=".json" style="display:none" onchange="importRules(this)">
@@ -401,11 +402,15 @@ function detectResultHeaders(rows){
   if(!rows.length)return null;
   const keys=Object.keys(rows[0]);
   return {
-    orderNo: pickHdr(keys,['주문번호','주문ID','orderno','ordernumber','ordno']),
-    itemNo : pickHdr(keys,['관리번호','품목별주문번호','품목별주문ID','품목주문번호','itemorderno','itemno','품목번호','라인번호']),
-    skuCode: pickHdr(keys,['상품코드','SKU코드','SKU','code','itemcode','품목코드']),
-    skuName: pickHdr(keys,['상품명','SKU명','품명','productname','itemname']),
-    qty    : pickHdr(keys,['수량','출고수량','qty','quantity','출하수량','선택수량']),
+    orderNo : pickHdr(keys,['주문번호','주문ID','orderno','ordernumber','ordno']),
+    itemNo  : pickHdr(keys,['관리번호','품목별주문번호','품목별주문ID','품목주문번호','itemorderno','itemno','품목번호','라인번호']),
+    skuCode : pickHdr(keys,['상품코드','SKU코드','SKU','code','itemcode','품목코드']),
+    skuName : pickHdr(keys,['상품명','SKU명','품명','productname','itemname']),
+    qty     : pickHdr(keys,['수량','출고수량','qty','quantity','출하수량','선택수량']),
+    vendor  : pickHdr(keys,['판매처','판매처명','판매처이름','vendor','seller']),
+    vendorPc: pickHdr(keys,['판매처상품코드','판매처 상품코드','vendorcode','vendorproductcode']),
+    vendorPn: pickHdr(keys,['판매처상품명','판매처 상품명','vendorname','vendorproductname']),
+    option  : pickHdr(keys,['판매처옵션','판매처 옵션','옵션','option','옵션명']),
   };
 }
 function loadR(inp){Array.from(inp.files).forEach(f=>loadOneResultFile(f));inp.value=''}
@@ -423,7 +428,9 @@ function loadOneResultFile(f){
     if(!rows.length){log(`✕ ${f.name}: 빈 시트`,'e');return}
     const hdr=detectResultHeaders(rows);
     const missing=[];
-    if(!hdr.orderNo && !hdr.itemNo)missing.push('주문번호 또는 관리번호(품목별주문번호)');
+    const hasKey=hdr.orderNo||hdr.itemNo;
+    const hasPattern=hdr.option||hdr.vendorPn;
+    if(!hasKey && !hasPattern)missing.push('라인ID(주문번호/관리번호) 또는 패턴(옵션/판매처 상품명)');
     if(!hdr.skuCode)missing.push('상품코드');
     if(!hdr.qty)missing.push('수량');
     if(missing.length){
@@ -433,7 +440,8 @@ function loadOneResultFile(f){
     RD_FILES.push({name:f.name,rows,hdr});
     RD=RD_FILES.flatMap(x=>x.rows.map(r=>({_src:x.name,_hdr:x.hdr,...r})));
     updateRsCard();
-    log(`+ ${f.name}: ${rows.length}행 정답 (orderNo=${hdr.orderNo}, itemNo=${hdr.itemNo||'∅'}, skuCode=${hdr.skuCode}, qty=${hdr.qty}) → 총 ${RD.length}행`,'ok');
+    const mode=hasKey?(hasPattern?'라인ID+패턴':'라인ID'):'패턴';
+    log(`+ ${f.name}: ${rows.length}행 정답 (${mode}) · orderNo=${hdr.orderNo||'∅'}, itemNo=${hdr.itemNo||'∅'}, vendorPn=${hdr.vendorPn||'∅'}, option=${hdr.option||'∅'}, skuCode=${hdr.skuCode}, qty=${hdr.qty} → 총 ${RD.length}행`,'ok');
     chk();
   });
 }
@@ -1258,6 +1266,12 @@ function updateStepper(){
     lur.disabled=!ready;
     lur.title=ready?`미매핑 ${UR.length}건 · 정답 ${RD.length}행`:(UR.length?'정답 파일 업로드 필요':'미매핑 항목 없음');
   }
+  // 정답 파일 → 규칙 등록 버튼 (정답 파일만 있으면 활성)
+  const lat=document.getElementById('learnAllTruthBtn');
+  if(lat){
+    lat.disabled=!(RD.length>0);
+    lat.title=RD.length?`정답 ${RD.length}행 · 패턴 사전으로 등록`:'정답 파일 업로드 필요';
+  }
   // 100% 도달 시각화
   const ds=document.getElementById('ds');
   if(ds)ds.classList.toggle('victory',s100);
@@ -1268,45 +1282,100 @@ function setStep(id,done,active){
   el.classList.toggle('active',active);
 }
 
-// 미매핑(UR) → 정답 파일 기준 학습규칙 등록
-function learnUnmappedFromTruth(){
-  if(!UR.length){log('미매핑 항목이 없습니다','i');return}
-  if(!RD.length){log('정답 파일이 없습니다 · 정답 파일을 먼저 업로드','e');return}
-  // 1) 정답 인덱스: 관리번호(or 주문번호) → Map(SKU코드 → 수량합)
-  const truthIdx=new Map();
+// 정답 파일에서 두 종류 인덱스를 빌드:
+//   idIdx  : 관리번호/주문번호 → Map(SKU코드 → 수량)
+//   patIdx : (판매처 상품명|옵션) → {vendorPn, option, skus: Map(SKU코드→수량)}
+function buildTruthIndices(){
+  const idIdx=new Map();
+  const patIdx=new Map();
   RD.forEach(r=>{
     const h=r._hdr;
-    const itemNo=h.itemNo?String(r[h.itemNo]||'').trim():'';
-    const orderNo=h.orderNo?String(r[h.orderNo]||'').trim():'';
-    const k=itemNo||orderNo;
-    if(!k)return;
     const sc=padCode(r[h.skuCode]);
     if(!sc||!SKU_CATALOG_ALL[sc])return;
     const qty=Number(r[h.qty])||1;
-    if(!truthIdx.has(k))truthIdx.set(k,new Map());
-    const m=truthIdx.get(k);
-    m.set(sc,(m.get(sc)||0)+qty);
+    // 라인 ID 인덱스
+    const itemNo=h.itemNo?String(r[h.itemNo]||'').trim():'';
+    const orderNo=h.orderNo?String(r[h.orderNo]||'').trim():'';
+    const lineKey=itemNo||orderNo;
+    if(lineKey){
+      if(!idIdx.has(lineKey))idIdx.set(lineKey,new Map());
+      const m=idIdx.get(lineKey);
+      m.set(sc,(m.get(sc)||0)+qty);
+    }
+    // 패턴 인덱스 (정확 매칭용)
+    const vendorPn=h.vendorPn?String(r[h.vendorPn]||'').trim():'';
+    const option=h.option?String(r[h.option]||'').trim():'';
+    if(vendorPn||option){
+      const pk=`${vendorPn}|${option}`;
+      if(!patIdx.has(pk))patIdx.set(pk,{vendorPn,option,skus:new Map()});
+      const v=patIdx.get(pk);
+      v.skus.set(sc,(v.skus.get(sc)||0)+qty);
+    }
   });
-  if(!truthIdx.size){log('정답 파일에서 유효한 행을 찾지 못했습니다','e');return}
-  if(!confirm(`미매핑 ${UR.length}건 중 정답에 일치하는 케이스를 학습규칙으로 일괄 등록할까요?\n(같은 패턴은 정답 기준으로 갱신됩니다)`))return;
+  return {idIdx,patIdx};
+}
+
+// 미매핑(UR) → 정답 파일 기준 학습규칙 등록 (라인ID → 패턴 폴백)
+function learnUnmappedFromTruth(){
+  if(!UR.length){log('미매핑 항목이 없습니다','i');return}
+  if(!RD.length){log('정답 파일이 없습니다 · 정답 파일을 먼저 업로드','e');return}
+  const {idIdx,patIdx}=buildTruthIndices();
+  if(!idIdx.size&&!patIdx.size){log('정답 파일에서 유효한 인덱스를 만들지 못했습니다','e');return}
+  if(!confirm(`미매핑 ${UR.length}건에 정답을 적용해 학습규칙으로 등록할까요?\n(라인ID 매칭 → 패턴 폴백, 같은 패턴은 갱신)`))return;
   const rs=loadRules();
-  let added=0,updated=0,notFound=0,noPattern=0;
+  let added=0,updated=0,notFound=0,noPattern=0,byId=0,byPat=0;
   UR.forEach(u=>{
-    const key=u.mg||u._orderKey;
-    if(!key||!truthIdx.has(key)){notFound++;return}
     const pattern=String(u.opt||u.pn||'').trim();
     if(!pattern){noPattern++;return}
-    const m=truthIdx.get(key);
-    const results=[...m.entries()].map(([code,qty])=>({code:parseInt(code,10),qty}));
-    if(!results.length){notFound++;return}
-    const note=`자동학습(미매핑→정답) ${new Date().toISOString().slice(0,10)} · ${u.v||''}/${u.pc||''}`;
-    const rule={pattern,target:'all',results,note,createdAt:new Date().toISOString(),_origin:'ur-truth',_key:String(key)};
+    let results=null,via='';
+    // 1) 라인 ID 매칭
+    const key=u.mg||u._orderKey;
+    if(key&&idIdx.has(key)){
+      const m=idIdx.get(key);
+      results=[...m.entries()].map(([c,q])=>({code:parseInt(c,10),qty:q}));
+      via='id';byId++;
+    }
+    // 2) 패턴 매칭 폴백: (판매처 상품명, 옵션)
+    if(!results){
+      const pk=`${String(u.pn||'').trim()}|${String(u.opt||'').trim()}`;
+      if(patIdx.has(pk)){
+        const m=patIdx.get(pk).skus;
+        results=[...m.entries()].map(([c,q])=>({code:parseInt(c,10),qty:q}));
+        via='pat';byPat++;
+      }
+    }
+    if(!results||!results.length){notFound++;return}
+    const note=`자동학습(미매핑→정답·${via}) ${new Date().toISOString().slice(0,10)} · ${u.v||''}/${u.pc||''}`;
+    const rule={pattern,target:'all',results,note,createdAt:new Date().toISOString(),_origin:'ur-truth',_via:via,_key:String(key||'')};
     const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
     if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:new Date().toISOString()};updated++}
     else{rs.push(rule);added++}
   });
   saveRules(rs);renderRules();
-  log(`미매핑 → 정답 학습: 신규 ${added} · 갱신 ${updated} · 정답없음 ${notFound} · 패턴부재 ${noPattern}`,'ok');
+  log(`미매핑 → 정답 학습: 신규 ${added} · 갱신 ${updated} · 라인ID매칭 ${byId} · 패턴매칭 ${byPat} · 정답없음 ${notFound} · 패턴부재 ${noPattern}`,'ok');
+}
+
+// 정답 파일 통째로 → 학습규칙 등록 (UR 무관, 정답 파일이 곧 매핑 사전인 형식 지원)
+function learnAllFromTruth(){
+  if(!RD.length){log('정답 파일이 없습니다','e');return}
+  const {patIdx}=buildTruthIndices();
+  if(!patIdx.size){log('정답 파일에서 패턴 인덱스를 만들지 못했습니다 (옵션/판매처 상품명 컬럼 누락)','e');return}
+  if(!confirm(`정답 파일에서 ${patIdx.size}개 패턴을 학습규칙으로 일괄 등록할까요?\n(중복 패턴은 정답 기준 갱신)`))return;
+  const rs=loadRules();
+  let added=0,updated=0,skipped=0;
+  patIdx.forEach(v=>{
+    const pattern=(v.option||v.vendorPn||'').trim();
+    if(!pattern){skipped++;return}
+    const results=[...v.skus.entries()].map(([c,q])=>({code:parseInt(c,10),qty:q}));
+    if(!results.length){skipped++;return}
+    const note=`자동학습(정답파일 전체) ${new Date().toISOString().slice(0,10)}`;
+    const rule={pattern,target:'all',results,note,createdAt:new Date().toISOString(),_origin:'truth-all'};
+    const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
+    if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:new Date().toISOString()};updated++}
+    else{rs.push(rule);added++}
+  });
+  saveRules(rs);renderRules();
+  log(`정답 파일 → 학습규칙 등록: 신규 ${added} · 갱신 ${updated} · 스킵 ${skipped}`,'ok');
 }
 
 // 명시적 [정답 대조 실행]
