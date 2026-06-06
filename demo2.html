@@ -872,7 +872,8 @@ function applyCustomRules(productName,optionRaw,orderQty){
     rule.results.forEach(r=>{
       const code=padCode(r.code);
       const name=SKU_CATALOG_ALL[code]||('코드 '+code);
-      matched.push({c:code,n:name,q:r.qty*orderQty});
+      // 정답 파일은 옵션 1단위 구성으로 기록 → 주문수량 곱하지 않음
+      matched.push({c:code,n:name,q:r.qty});
     });
   });
   return matched;
@@ -910,11 +911,9 @@ function run(){
     // STEP 2: 내장 파싱규칙
     const parsed=parseOption(optionRaw,pName,pcode,oQty);
     if(parsed.length>0){
-      // 복수 SKU 결과 = 옵션에서 이미 선택별 1개씩 인코딩 → oQty는 선택 총합을 나타내므로 곱하지 않음
-      // 단일 SKU 결과 = 진짜 주문 수량이므로 oQty 곱셈 적용
-      const qMult=parsed.length>1?1:oQty;
+      // 정답 파일은 옵션 1단위 구성으로 기록 → 주문수량 곱하지 않음 (옵션이 N개로 나눠지는 의미)
       parsed.forEach((p,i)=>{
-        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q*qMult,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
       });
       okCount++;
       log(`✓ #${mgmt} 옵션파싱 (${parsed.length}개 상품)`,'ok');
