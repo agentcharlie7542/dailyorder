@@ -285,7 +285,8 @@ tr.group-edited:hover td{background:#fef9c3}
 <button class="btn btn-o" onclick="exportRules()">📤 내보내기</button>
 <button class="btn btn-o" onclick="document.getElementById('cr_import').click()">📥 가져오기</button>
 <input type="file" id="cr_import" accept=".json" style="display:none" onchange="importRules(this)">
-<button class="btn btn-r" onclick="clearRules()">🗑 전체 삭제</button>
+<button class="btn btn-r" onclick="clearRules()">🗑 학습규칙만 삭제</button>
+<button class="btn btn-r" style="background:#7f1d1d" onclick="hardReset()">🧹 모든 학습 데이터 초기화</button>
 <span id="cr_msg" style="font-size:11px;color:var(--m);margin-left:auto"></span>
 </div>
 <div style="margin-top:14px">
@@ -1813,6 +1814,21 @@ function addRule(){
 }
 function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
 function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
+function hardReset(){
+  if(!confirm('모든 학습 데이터를 초기화합니다.\n\n• 학습규칙\n• 정확도 이력\n• Ollama 설정\n• 현재 화면 상태(Raw/정답/매핑/Diff)\n\n계속할까요?'))return;
+  // localStorage 키 비우기
+  [CR_KEY,ACC_KEY,OLM_KEY].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
+  // 화면 상태 초기화
+  clr();
+  // 학습규칙 / 정확도 / Ollama UI 갱신
+  renderRules();renderAccHistory();
+  const olmOn=document.getElementById('olm_on');if(olmOn)olmOn.checked=false;
+  const olmUrl=document.getElementById('olm_url');if(olmUrl)olmUrl.value='http://localhost:11434';
+  const olmModel=document.getElementById('olm_model');if(olmModel)olmModel.value='qwen2.5:7b';
+  const olmMsg=document.getElementById('olm_msg');if(olmMsg)olmMsg.textContent='';
+  showMsg('✓ 모든 학습 데이터를 초기화했습니다.','var(--g)');
+  log('🧹 모든 학습 데이터 초기화 완료','ok');
+}
 function exportRules(){
   const rs=loadRules();
   if(!rs.length){showMsg('내보낼 규칙이 없습니다.','var(--m)');return}
