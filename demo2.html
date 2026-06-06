@@ -209,6 +209,7 @@ tr.group-edited:hover td{background:#fef9c3}
 <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
 <div class="acts">
   <button class="btn btn-p" id="cmpBtn" onclick="compareNow()" disabled>🔬 정답 대조 실행</button>
+  <button class="btn btn-y" id="learnURBtn" onclick="learnUnmappedFromTruth()" disabled>🧠 미매핑 → 정답 학습</button>
   <button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button>
   <span id="cmpHint" style="font-size:11px;color:var(--m);margin-left:6px"></span>
 </div>
@@ -1250,6 +1251,13 @@ function updateStepper(){
     cmp.disabled=!ready;
     document.getElementById('cmpHint').textContent=ready?'(정답 파일 감지)':(sMapped?'정답 파일을 업로드하면 활성':'');
   }
+  // 미매핑 → 정답 학습 버튼 상태 (UR과 정답 파일이 모두 있을 때 활성)
+  const lur=document.getElementById('learnURBtn');
+  if(lur){
+    const ready=UR.length>0&&RD.length>0;
+    lur.disabled=!ready;
+    lur.title=ready?`미매핑 ${UR.length}건 · 정답 ${RD.length}행`:(UR.length?'정답 파일 업로드 필요':'미매핑 항목 없음');
+  }
   // 100% 도달 시각화
   const ds=document.getElementById('ds');
   if(ds)ds.classList.toggle('victory',s100);
@@ -1258,6 +1266,47 @@ function setStep(id,done,active){
   const el=document.getElementById(id);if(!el)return;
   el.classList.toggle('done',done&&!active);
   el.classList.toggle('active',active);
+}
+
+// 미매핑(UR) → 정답 파일 기준 학습규칙 등록
+function learnUnmappedFromTruth(){
+  if(!UR.length){log('미매핑 항목이 없습니다','i');return}
+  if(!RD.length){log('정답 파일이 없습니다 · 정답 파일을 먼저 업로드','e');return}
+  // 1) 정답 인덱스: 관리번호(or 주문번호) → Map(SKU코드 → 수량합)
+  const truthIdx=new Map();
+  RD.forEach(r=>{
+    const h=r._hdr;
+    const itemNo=h.itemNo?String(r[h.itemNo]||'').trim():'';
+    const orderNo=h.orderNo?String(r[h.orderNo]||'').trim():'';
+    const k=itemNo||orderNo;
+    if(!k)return;
+    const sc=padCode(r[h.skuCode]);
+    if(!sc||!SKU_CATALOG_ALL[sc])return;
+    const qty=Number(r[h.qty])||1;
+    if(!truthIdx.has(k))truthIdx.set(k,new Map());
+    const m=truthIdx.get(k);
+    m.set(sc,(m.get(sc)||0)+qty);
+  });
+  if(!truthIdx.size){log('정답 파일에서 유효한 행을 찾지 못했습니다','e');return}
+  if(!confirm(`미매핑 ${UR.length}건 중 정답에 일치하는 케이스를 학습규칙으로 일괄 등록할까요?\n(같은 패턴은 정답 기준으로 갱신됩니다)`))return;
+  const rs=loadRules();
+  let added=0,updated=0,notFound=0,noPattern=0;
+  UR.forEach(u=>{
+    const key=u.mg||u._orderKey;
+    if(!key||!truthIdx.has(key)){notFound++;return}
+    const pattern=String(u.opt||u.pn||'').trim();
+    if(!pattern){noPattern++;return}
+    const m=truthIdx.get(key);
+    const results=[...m.entries()].map(([code,qty])=>({code:parseInt(code,10),qty}));
+    if(!results.length){notFound++;return}
+    const note=`자동학습(미매핑→정답) ${new Date().toISOString().slice(0,10)} · ${u.v||''}/${u.pc||''}`;
+    const rule={pattern,target:'all',results,note,createdAt:new Date().toISOString(),_origin:'ur-truth',_key:String(key)};
+    const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
+    if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:new Date().toISOString()};updated++}
+    else{rs.push(rule);added++}
+  });
+  saveRules(rs);renderRules();
+  log(`미매핑 → 정답 학습: 신규 ${added} · 갱신 ${updated} · 정답없음 ${notFound} · 패턴부재 ${noPattern}`,'ok');
 }
 
 // 명시적 [정답 대조 실행]
