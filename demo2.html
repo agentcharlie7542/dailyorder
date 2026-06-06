@@ -323,601 +323,250 @@ const ACC_KEY='mealit_acc_history_v1';
 const OLM_KEY='mealit_ollama_cfg_v1';
 const OLM_MAX=50;
 
-// ── SKU 마스터
+// ── SKU 마스터 (밀잇_주문옵션_파싱규칙_v1.md §3 기준)
+// 12맛 × 최대 4규격 + 비맛/세트 SKU
 const SKU = {
-  '피스타치오': [{c:'00020',n:'밀잇 피스타치오맛 560g',t:'560'},{c:'00019',n:'밀잇 피스타치오맛 40g',t:'40'},{c:'00054',n:'밀잇 피스타치오맛(7개입) 40g',t:'7p'}],
-  '시리얼': [{c:'00018',n:'밀잇 시리얼맛 560g',t:'560'},{c:'00017',n:'밀잇 시리얼맛 40g',t:'40'},{c:'00058',n:'밀잇 시리얼맛(7개입) 40g',t:'7p'}],
-  '말차초코쿠키': [{c:'00022',n:'밀잇 말차초코쿠키맛 560g',t:'560'},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',t:'40'},{c:'00062',n:'밀잇 말차초코쿠키맛(7개입) 40g',t:'7p'}],
-  '말차초코': [{c:'00022',n:'밀잇 말차초코쿠키맛 560g',t:'560'},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',t:'40'},{c:'00062',n:'밀잇 말차초코쿠키맛(7개입) 40g',t:'7p'}],
-  '초콜릿': [{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'},{c:'00011',n:'밀잇 초콜릿맛 40g',t:'40'},{c:'00057',n:'밀잇 초콜릿맛(7개입) 40g',t:'7p'}],
-  '초코': [{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'},{c:'00011',n:'밀잇 초콜릿맛 40g',t:'40'},{c:'00057',n:'밀잇 초콜릿맛(7개입) 40g',t:'7p'}],
-  '초콜리': [{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'}],
-  '쿠키앤크림': [{c:'00024',n:'밀잇 쿠키앤크림맛 560g',t:'560'},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',t:'40'},{c:'00055',n:'밀잇 쿠키앤크림맛(7개입) 40g',t:'7p'}],
-  '쿠앤크': [{c:'00024',n:'밀잇 쿠키앤크림맛 560g',t:'560'},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',t:'40'},{c:'00055',n:'밀잇 쿠키앤크림맛(7개입) 40g',t:'7p'}],
-  '미숫가루': [{c:'00008',n:'밀잇 미숫가루맛 560g',t:'560'},{c:'00006',n:'밀잇 미숫가루맛 450g',t:'450'},{c:'00005',n:'밀잇 미숫가루맛 40g',t:'40'},{c:'00060',n:'밀잇 미숫가루맛(7개입) 40g',t:'7p'}],
-  '흑임자': [{c:'00028',n:'밀잇 흑임자맛 560g',t:'560'},{c:'00026',n:'밀잇 흑임자맛 450g',t:'450'},{c:'00025',n:'밀잇 흑임자맛 40g',t:'40'},{c:'00053',n:'밀잇 흑임자맛(7개입) 40g',t:'7p'}],
-  '커피': [{c:'00016',n:'밀잇 커피맛 560g',t:'560'},{c:'00015',n:'밀잇 커피맛 40g',t:'40'},{c:'00056',n:'밀잇 커피맛(7개입) 40g',t:'7p'}],
-  '바나나': [{c:'00010',n:'밀잇 바나나맛 560g',t:'560'},{c:'00009',n:'밀잇 바나나맛 40g',t:'40'},{c:'00059',n:'밀잇 바나나맛(7개입) 40g',t:'7p'}],
-  '멜론': [{c:'00004',n:'밀잇 멜론맛 560g',t:'560'},{c:'00003',n:'밀잇 멜론맛 40g',t:'40'},{c:'00061',n:'밀잇 멜론맛(7개입) 40g',t:'7p'}],
-  '딸기': [{c:'00002',n:'밀잇 딸기맛 450g',t:'450'},{c:'00036',n:'밀잇 딸기맛 560g',t:'560'}],
-  '초코바나나': [{c:'00013',n:'밀잇 초코바나나맛 450g',t:'450'}],
+  '딸기':        [{c:'00001',n:'밀잇 딸기맛 40g',t:'40'},{c:'00063',n:'밀잇 딸기맛(7개입) 40g',t:'7p'},{c:'00036',n:'밀잇 딸기맛 560g',t:'560'},{c:'00002',n:'밀잇 딸기맛 450g',t:'450'}],
+  '멜론':        [{c:'00003',n:'밀잇 멜론맛 40g',t:'40'},{c:'00061',n:'밀잇 멜론맛(7개입) 40g',t:'7p'},{c:'00004',n:'밀잇 멜론맛 560g',t:'560'}],
+  '미숫가루':    [{c:'00005',n:'밀잇 미숫가루맛 40g',t:'40'},{c:'00060',n:'밀잇 미숫가루맛(7개입) 40g',t:'7p'},{c:'00006',n:'밀잇 미숫가루맛 450g',t:'450'},{c:'00008',n:'밀잇 미숫가루맛 560g',t:'560'}],
+  '바나나':      [{c:'00009',n:'밀잇 바나나맛 40g',t:'40'},{c:'00059',n:'밀잇 바나나맛(7개입) 40g',t:'7p'},{c:'00010',n:'밀잇 바나나맛 560g',t:'560'}],
+  '초콜릿':      [{c:'00011',n:'밀잇 초콜릿맛 40g',t:'40'},{c:'00057',n:'밀잇 초콜릿맛(7개입) 40g',t:'7p'},{c:'00012',n:'밀잇 초콜릿맛 560g',t:'560'}],
+  '초코바나나':  [{c:'00013',n:'밀잇 초코바나나맛 450g',t:'450'}],
+  '커피':        [{c:'00015',n:'밀잇 커피맛 40g',t:'40'},{c:'00056',n:'밀잇 커피맛(7개입) 40g',t:'7p'},{c:'00016',n:'밀잇 커피맛 560g',t:'560'}],
+  '시리얼':      [{c:'00017',n:'밀잇 시리얼맛 40g',t:'40'},{c:'00058',n:'밀잇 시리얼맛(7개입) 40g',t:'7p'},{c:'00018',n:'밀잇 시리얼맛 560g',t:'560'}],
+  '피스타치오':  [{c:'00019',n:'밀잇 피스타치오맛 40g',t:'40'},{c:'00054',n:'밀잇 피스타치오맛(7개입) 40g',t:'7p'},{c:'00020',n:'밀잇 피스타치오맛 560g',t:'560'}],
+  '말차초코쿠키':[{c:'00021',n:'밀잇 말차초코쿠키맛 40g',t:'40'},{c:'00062',n:'밀잇 말차초코쿠키맛(7개입) 40g',t:'7p'},{c:'00022',n:'밀잇 말차초코쿠키맛 560g',t:'560'}],
+  '쿠키앤크림':  [{c:'00023',n:'밀잇 쿠키앤크림맛 40g',t:'40'},{c:'00055',n:'밀잇 쿠키앤크림맛(7개입) 40g',t:'7p'},{c:'00024',n:'밀잇 쿠키앤크림맛 560g',t:'560'}],
+  '흑임자':      [{c:'00025',n:'밀잇 흑임자맛 40g',t:'40'},{c:'00053',n:'밀잇 흑임자맛(7개입) 40g',t:'7p'},{c:'00026',n:'밀잇 흑임자맛 450g',t:'450'},{c:'00028',n:'밀잇 흑임자맛 560g',t:'560'}],
 };
 
+// 비맛/세트 SKU 카탈로그 (추가 등록)
+const SKU_EXTRA = [
+  ['00033','밀잇 웰니스 애사비 젤리컷 8000'],
+  ['00035','밀잇 전용 친환경 트라이탄 보틀'],
+  ['00064','밀잇 스타터팩(7개입) 40g'],
+  ['00065','밀잇 스타터팩(5개입) 40g'],
+  ['00066','밀잇 스타터팩(10개입) 40g'],
+  ['00086','밀잇 스타터팩(11개입) 40g'],
+  ['00029','밀잇 그래놀라_애플시나몬맛'],
+  ['00030','밀잇 그래놀라_카카오초콜릿맛'],
+  ['00031','밀잇 그래놀라_티라미수맛'],
+  ['00082','밀잇 포캣3종 (피+초+시)'],
+  ['00083','포켓몬 에어팟케이스(GWP)'],
+];
 const SKU_CATALOG_ALL = {};
-Object.values(SKU).flat().forEach(s => { SKU_CATALOG_ALL[s.c] = s.n; });
-[['00035','밀잇 전용 친환경 트라이탄 보틀'],['00033','밀잇 웰니스 애사비 젤리컷 8000'],['00064','밀잇 스타터팩(7개입) 40g'],['00065','밀잇 스타터팩(5개입) 40g'],['00066','밀잇 스타터팩(10개입) 40g'],['00082','밀잇 포캣3종 (피+초+시)'],['00029','밀잇 그래놀라_애플시나몬맛'],['00030','밀잇 그래놀라_카카오초콜릿맛'],['00031','밀잇 그래놀라_티라미수맛'],['00083','포켓몬 에어팟케이스(GWP)']].forEach(([c,n])=>{SKU_CATALOG_ALL[c]=n});
+Object.values(SKU).flat().forEach(s=>{SKU_CATALOG_ALL[s.c]=s.n});
+SKU_EXTRA.forEach(([c,n])=>{SKU_CATALOG_ALL[c]=n});
 
-function log(m,t='i'){const b=document.getElementById('lg');const d=document.createElement('div');d.className=t;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;b.appendChild(d);b.scrollTop=b.scrollHeight}
-function readXL(f,cb){const r=new FileReader();r.onload=e=>{const d=new Uint8Array(e.target.result);cb(XLSX.read(d,{type:'array',cellDates:true}))};r.readAsArrayBuffer(f)}
-function loadO(inp){Array.from(inp.files).forEach(f=>loadOneFile(f));inp.value=''}
-function loadOneFile(f){
-  if(OD_FILES.find(x=>x.name===f.name)){log(`⚠ 이미 로드됨: ${f.name}`,'w');return}
-  readXL(f,wb=>{
-    const sn=wb.SheetNames.find(s=>s.includes('주문')||s.includes('order'))||wb.SheetNames[0];
-    let rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
-    // HTML XLS 파일: SheetJS가 컬럼을 숫자 인덱스(0,1,2…)로 읽을 때 보정
-    // → 첫 행의 값을 헤더로 사용하여 재파싱
-    if(rows.length>0&&Object.keys(rows[0]).every(k=>!isNaN(k))){
-      const arr=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
-      const hdrs=arr[0].map(h=>String(h).trim());
-      rows=arr.slice(1).map(r=>Object.fromEntries(hdrs.map((h,i)=>[h,r[i]??''])));
-      log(`HTML XLS 감지 → 헤더 재매핑 (${hdrs.join(', ')})`,'w');
-    }
-    OD_FILES.push({name:f.name,rows});
-    OD=OD_FILES.flatMap(x=>x.rows);
-    updateOCard();
-    log(`+ ${f.name}: ${rows.length}행 추가 → 총 ${OD.length}행`,'ok');
-    chk();
-  });
-}
-function removeFile(name){
-  OD_FILES=OD_FILES.filter(x=>x.name!==name);
-  OD=OD_FILES.flatMap(x=>x.rows);
-  updateOCard();
-  if(!OD.length){document.getElementById('mb').disabled=true;log('파일 전체 제거됨','w')}
-}
-function updateOCard(){
-  const ok=OD_FILES.length>0;
-  document.getElementById('oc').classList.toggle('ok',ok);
-  document.getElementById('os').textContent=ok?`✓ ${OD_FILES.length}개 파일 · ${OD.length}행`:'';
-  document.getElementById('oc_hint').textContent=ok?'추가 파일 클릭 또는 드래그':'클릭 또는 파일을 드래그';
-  document.getElementById('oc_files').innerHTML=OD_FILES.map(f=>`<div class="file-tag"><span class="fn" title="${f.name}">${f.name.replace(/\.xlsx?$/i,'')} (${f.rows.length})</span><span class="rm" onclick="event.stopPropagation();removeFile('${f.name.replace(/'/g,"\\'")}')">✕</span></div>`).join('');
-}
-function ocDrag(e){e.preventDefault();document.getElementById('oc').classList.add('drag-over')}
-function ocDragLeave(e){document.getElementById('oc').classList.remove('drag-over')}
-function ocDrop(e){
-  e.preventDefault();
-  document.getElementById('oc').classList.remove('drag-over');
-  Array.from(e.dataTransfer.files).filter(f=>/\.xlsx?$/i.test(f.name)).forEach(f=>loadOneFile(f));
-}
-function chk(){document.getElementById('mb').disabled=!(OD.length>0);if(OD.length>0)log(RD.length?'준비 완료. 매핑 후 [정답 대조 실행] 가능':'준비 완료. [매핑 실행] 클릭','ok');updateStepper()}
+// ── 맛 정규화 사전 (규칙서 §5)
+const FLAVOR_DICT = {
+  '초콜릿':'초콜릿','초콜리':'초콜릿','초코':'초콜릿','쇼콜라':'초콜릿','巧克力':'초콜릿',
+  '초코바나나':'초코바나나','香蕉巧克力':'초코바나나',
+  '쿠키앤크림':'쿠키앤크림','쿠앤크':'쿠키앤크림','可可黑旋風':'쿠키앤크림',
+  '말차초코쿠키':'말차초코쿠키','말차쿠키':'말차초코쿠키','말차초코':'말차초코쿠키','말차':'말차초코쿠키','抹茶巧克力脆片':'말차초코쿠키',
+  '미숫가루':'미숫가루','미수가루':'미숫가루',
+  '딸기':'딸기','草莓拿鐵':'딸기','草莓':'딸기',
+  '커피':'커피','咖啡':'커피','香醇咖啡':'커피','coffee':'커피','coffe':'커피','커비':'커피',
+  '피스타치오':'피스타치오','피스타':'피스타치오',
+  '시리얼':'시리얼',
+  '흑임자':'흑임자',
+  '바나나':'바나나','香蕉':'바나나',
+  '멜론':'멜론','메론':'멜론',
+};
+const FLAVOR_KEYS_BY_LEN = Object.keys(FLAVOR_DICT).sort((a,b)=>b.length-a.length);
 
-// ── 정답(Result) 파일 적재 + 헤더 자동 인식
-function normHdr(s){return String(s||'').toLowerCase().replace(/\s+/g,'').replace(/[_\-./()]/g,'')}
-function pickHdr(keys,cands){
-  for(const c of cands){const nc=normHdr(c);const hit=keys.find(k=>normHdr(k)===nc);if(hit)return hit}
-  for(const c of cands){const nc=normHdr(c);const hit=keys.find(k=>normHdr(k).includes(nc));if(hit)return hit}
+// ── 색팩 약어 (규칙서 §7-1)
+const PACK_FLAVOR_SHORT = {
+  '시리얼':'시리얼','말차':'말차초코쿠키','초코':'초콜릿','커피':'커피','바나나':'바나나','피스타':'피스타치오','피':'피스타치오',
+  '쿠앤크':'쿠키앤크림','미숫가루':'미숫가루','흑임자':'흑임자','멜론':'멜론','딸기':'딸기',
+};
+const PACK_KEYS_BY_LEN = Object.keys(PACK_FLAVOR_SHORT).sort((a,b)=>b.length-a.length);
+
+// ── 노이즈 제거
+function stripNoise(s){
+  return String(s||'')
+    .replace(/^(NEW|UPGRADE|BEST|HOT)\s+/gi,'')
+    .replace(/맛\s*선택\s*=/g,'')
+    .replace(/\([0-9]+\s*원\)/g,'')
+    .replace(/\(-?\d+%[▼▲]?\)/g,'')
+    .replace(/\(\s*-?\d+\s*%\s*\)/g,'')
+    .replace(/^[\-\s,]+|[\-\s,]+$/g,'')
+    .trim();
+}
+
+// ── 표준 맛으로 변환
+function normFlavor(token){
+  const t=stripNoise(String(token||''));
+  if(!t)return null;
+  for(const k of FLAVOR_KEYS_BY_LEN){ if(t.includes(k))return FLAVOR_DICT[k] }
   return null;
 }
-function detectResultHeaders(rows){
-  if(!rows.length)return null;
-  const keys=Object.keys(rows[0]);
-  return {
-    orderNo : pickHdr(keys,['주문번호','주문ID','orderno','ordernumber','ordno']),
-    itemNo  : pickHdr(keys,['관리번호','품목별주문번호','품목별주문ID','품목주문번호','itemorderno','itemno','품목번호','라인번호']),
-    skuCode : pickHdr(keys,['상품코드','SKU코드','SKU','code','itemcode','품목코드']),
-    skuName : pickHdr(keys,['상품명','SKU명','품명','productname','itemname']),
-    qty     : pickHdr(keys,['수량','출고수량','qty','quantity','출하수량','선택수량']),
-    vendor  : pickHdr(keys,['판매처','판매처명','판매처이름','vendor','seller']),
-    vendorPc: pickHdr(keys,['판매처상품코드','판매처 상품코드','vendorcode','vendorproductcode']),
-    vendorPn: pickHdr(keys,['판매처상품명','판매처 상품명','vendorname','vendorproductname']),
-    option  : pickHdr(keys,['판매처옵션','판매처 옵션','옵션','option','옵션명']),
-  };
-}
-function loadR(inp){Array.from(inp.files).forEach(f=>loadOneResultFile(f));inp.value=''}
-function loadOneResultFile(f){
-  if(RD_FILES.find(x=>x.name===f.name)){log(`⚠ 이미 로드됨(정답): ${f.name}`,'w');return}
-  readXL(f,wb=>{
-    const sn=wb.SheetNames.find(s=>/result|정답|매핑|sku|출고/i.test(s))||wb.SheetNames[0];
-    let rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
-    if(rows.length>0&&Object.keys(rows[0]).every(k=>!isNaN(k))){
-      const arr=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
-      const hdrs=arr[0].map(h=>String(h).trim());
-      rows=arr.slice(1).map(r=>Object.fromEntries(hdrs.map((h,i)=>[h,r[i]??''])));
-      log(`HTML XLS 감지(정답) → 헤더 재매핑`,'w');
-    }
-    if(!rows.length){log(`✕ ${f.name}: 빈 시트`,'e');return}
-    const hdr=detectResultHeaders(rows);
-    const missing=[];
-    const hasKey=hdr.orderNo||hdr.itemNo;
-    const hasPattern=hdr.option||hdr.vendorPn;
-    if(!hasKey && !hasPattern)missing.push('라인ID(주문번호/관리번호) 또는 패턴(옵션/판매처 상품명)');
-    if(!hdr.skuCode)missing.push('상품코드');
-    if(!hdr.qty)missing.push('수량');
-    if(missing.length){
-      log(`✕ ${f.name}: 필수 컬럼 누락 [${missing.join(', ')}] · 실제 헤더=${Object.keys(rows[0]).join(', ')}`,'e');
-      return;
-    }
-    // Forward-fill: 같은 묶음의 빈 행을 직전 값으로 채움
-    // (도구 출력 형식에서 묶음 첫 행만 vendor/vendorPn/option이 있고 나머지는 비어 있음)
-    let lastV='', lastPc='', lastPn='', lastOpt='';
-    let filled=0;
-    rows.forEach(r=>{
-      if(hdr.vendor){ if(r[hdr.vendor]) lastV=r[hdr.vendor]; else { r[hdr.vendor]=lastV; if(lastV)filled++; } }
-      if(hdr.vendorPc){ if(r[hdr.vendorPc]) lastPc=r[hdr.vendorPc]; else { r[hdr.vendorPc]=lastPc; } }
-      if(hdr.vendorPn){ if(r[hdr.vendorPn]) lastPn=r[hdr.vendorPn]; else { r[hdr.vendorPn]=lastPn; } }
-      if(hdr.option){ if(r[hdr.option]) lastOpt=r[hdr.option]; else { r[hdr.option]=lastOpt; } }
-    });
-    RD_FILES.push({name:f.name,rows,hdr});
-    RD=RD_FILES.flatMap(x=>x.rows.map(r=>({_src:x.name,_hdr:x.hdr,...r})));
-    updateRsCard();
-    const mode=hasKey?(hasPattern?'라인ID+패턴':'라인ID'):'패턴';
-    log(`+ ${f.name}: ${rows.length}행 정답 (${mode}) · forward-fill ${filled}행 · orderNo=${hdr.orderNo||'∅'}, itemNo=${hdr.itemNo||'∅'}, vendorPn=${hdr.vendorPn||'∅'}, option=${hdr.option||'∅'}, skuCode=${hdr.skuCode}, qty=${hdr.qty} → 총 ${RD.length}행`,'ok');
-    chk();
-  });
-}
-function removeResultFile(name){
-  RD_FILES=RD_FILES.filter(x=>x.name!==name);
-  RD=RD_FILES.flatMap(x=>x.rows.map(r=>({_src:x.name,_hdr:x.hdr,...r})));
-  updateRsCard();
-  log('정답 파일 제거','w');
-  chk();
-}
-function updateRsCard(){
-  const ok=RD_FILES.length>0;
-  document.getElementById('rsc').classList.toggle('ok',ok);
-  document.getElementById('rss').textContent=ok?`✓ ${RD_FILES.length}개 파일 · ${RD.length}행`:'';
-  document.getElementById('rsc_hint').textContent=ok?'추가 파일 클릭 또는 드래그':'담당자 분리 결과 · 대조용';
-  document.getElementById('rsc_files').innerHTML=RD_FILES.map(f=>`<div class="file-tag"><span class="fn" title="${f.name}">${f.name.replace(/\.xlsx?$/i,'')} (${f.rows.length})</span><span class="rm" onclick="event.stopPropagation();removeResultFile('${f.name.replace(/'/g,"\\'")}')">✕</span></div>`).join('');
-}
-function rscDrag(e){e.preventDefault();document.getElementById('rsc').classList.add('drag-over')}
-function rscDragLeave(e){document.getElementById('rsc').classList.remove('drag-over')}
-function rscDrop(e){
-  e.preventDefault();
-  document.getElementById('rsc').classList.remove('drag-over');
-  Array.from(e.dataTransfer.files).filter(f=>/\.xlsx?$/i.test(f.name)).forEach(f=>loadOneResultFile(f));
-}
 
-function padCode(c){const s=String(c||'').replace(/^0+/,'');return s?s.padStart(5,'0'):''}
-
-
-function normOp(s){s=String(s).trim();if(s==='nan'||!s)return '';s=s.replace(/<[^>]+>/g,'');s=s.replace(/\s+/g,' ').trim();return s}
-
-// ── "Ng" 표기 → 사이즈 타입 변환 (g 앞 숫자 = 제품 용량)
-// 560g → 560 / 450g → 450 / 40g → 40 / 그외는 가까운 표준 사이즈로 스냅
-function gToSize(g){
-  const n=parseInt(g);
-  if(isNaN(n))return null;
-  if(n>=500)return '560';
-  if(n>=200)return '450';
-  if(n>0&&n<=100)return '40';
-  return null;
-}
-function detectGSize(text){
-  if(!text)return null;
-  // "NN g" / "NNg" 패턴 (대소문자 무관, 공백 허용)
-  const matches=[...String(text).matchAll(/(\d{2,4})\s*g\b/gi)];
-  if(matches.length===0)return null;
-  // 가장 처음 등장한 g 표기 사용
-  return gToSize(matches[0][1]);
-}
-function detectSizeCtx(prodName, prodCode, option){
-  const combined=(prodName+' '+option+' '+prodCode);
-  // 1) g 표기 최우선 (560g, 450g, 40g)
-  const g=detectGSize(combined);
-  if(g)return g;
-  // 2) 키워드 보조
-  const lc=combined.toLowerCase();
-  if(lc.includes('식사대용'))return '450';
-  if(lc.includes('7개입')||lc.includes('세트'))return '7p';
-  if(lc.includes('파우치')||lc.includes('낱포')||lc.includes('포켓'))return '40';
-  if(lc.includes('대용량')||lc.includes('용기')||lc.includes('1통'))return '560';
+// ── 규격 결정 (규칙서 §6): 7개입 → '7p', 560g → '560', 450g → '450', 40g → '40'
+function detectSize(token, pname){
+  const t=String(token||''); const p=String(pname||'');
+  if(/7\s*개입|세트\s*\(\s*7\s*개입\s*\)|7\s*入裝|\(7개입\)|_7개\b/.test(t))return '7p';
+  if(/대용량|560\s*g/.test(t))return '560';
+  if(/450\s*g/.test(t))return '450';
+  if(/40\s*g(?!\d)/.test(t))return '40';
+  // 토큰에 단서 없으면 PNAME 라인으로
+  if(/식단관리/.test(p))return '560';
+  if(/식사대용|든든\s*키트/.test(p))return '450';
+  if(/포켓형|낱포/.test(p))return '40';
   return '560';
 }
-function pickSKU(flavor,sizeCtx){
-  let key=flavor.replace(/맛$/,'').replace(/^NEW\s*/i,'').replace(/^UPGRADE\s*/i,'').replace(/^BEST\s*/i,'').replace(/^HOT\s*/i,'').trim();
-  if(key.includes('말차'))key='말차초코쿠키';
-  if(key.includes('쿠앤크')||key.includes('쿠키앤'))key='쿠키앤크림';
-  if(key.includes('초코바나나'))key='초코바나나';
-  else if(key.includes('초콜리'))key='초콜릿';
-  else if(key.includes('초코')&&!key.includes('바나나')&&!key.includes('말차'))key='초콜릿';
-  if(key.includes('미숫'))key='미숫가루';
-  const candidates=SKU[key];
-  if(!candidates)return null;
-  let best;
-  if((key==='딸기'||key==='초코바나나')&&sizeCtx==='560'){
-    best=candidates.find(c=>c.t==='450')||candidates.find(c=>c.t==='560')||candidates[0];
-  }else{
-    best=candidates.find(c=>c.t===sizeCtx);
-    if(!best)best=candidates[0];
-  }
-  return best;
+
+// ── 수량 추출 (N개/통/포/팩/봉, 없으면 1)
+function extractQty(token){
+  const m=String(token||'').match(/(\d+)\s*[개통포팩봉]/);
+  return m?parseInt(m[1],10):1;
 }
 
-function parseOption(option,prodName,prodCode,orderQty){
-  const results=[];
+// ── SKU 마스터에서 (맛,규격) → 코드
+function lookupSKU(flavor, size){
+  const arr=SKU[flavor];
+  if(!arr)return null;
+  let hit=arr.find(s=>s.t===size);
+  if(!hit){
+    // 폴백: 가능한 사이즈 순서 (요청 사이즈에서 가까운 것)
+    const order={'7p':['7p','40','560','450'],'40':['40','7p','450','560'],'450':['450','560','40','7p'],'560':['560','450','40','7p']}[size]||['560','40','450','7p'];
+    for(const s of order){ hit=arr.find(x=>x.t===s); if(hit)break }
+  }
+  return hit||null;
+}
 
-  // ── STEP 1: 정보성 패턴 제거 전처리
-  // (N원) (N%) (무료배송) (+0) [+포켓 N종] N회분 개당N원 → 수량 파싱에 불필요
-  let opt=normOp(option)
-    .replace(/\(\s*\+?\s*0\s*\)/g,'')
-    .replace(/\(\s*무료배송\s*\)/g,'')
-    .replace(/\(\s*\d+\s*%[▼▲]?\s*\)/g,'')
-    .replace(/\(\s*\d{3,6}\s*원\s*\)/g,'')
-    .replace(/\[\s*\+?\s*포켓\s*\d+\s*종\s*\]/g,'')
-    .replace(/\d+\s*회분/g,'')
-    .replace(/개당\s*\d+\s*원/g,'')
-    .replace(/\s+/g,' ').trim();
+// ── 단독특가 사전 (규칙서 §8)
+function applySpecialDeal(optText){
+  const r=[]; const s=String(optText||'');
+  // 보틀증정 / 트라이탄
+  if(/트라이탄.*?(쉐이커|보틀)|보틀.*?증정|전용\s*보틀(?!\s*선택)/.test(s)) r.push({c:'00035',q:1});
+  // 애사비 젤리컷 / 혈당DOWN
+  if(/애사비.*?젤리컷|혈당.*?down/i.test(s)) r.push({c:'00033',q:1});
+  // 스타터팩 7종
+  if(/스타터.*?팩.*?7종|7종.*?스타터.*?팩/.test(s)) r.push({c:'00064',q:1});
+  return r;
+}
 
-  const pn=String(prodName||'');
-  const pc=String(prodCode||'');
-  const combined=pn+' '+opt;
+// ── 패키지 사전 (스타터팩 묶음 SKU)
+function applyPackageBundle(optText){
+  const r=[]; const s=String(optText||'');
+  if(/스타터.*?팩.*?5개입|5종.*?스타터/.test(s)) r.push({c:'00065',q:1});
+  if(/스타터.*?팩.*?10개입|10종.*?스타터|綜合口味10包入/.test(s)) r.push({c:'00066',q:1});
+  if(/스타터.*?팩.*?11개입|11가지\s*맛\s*세트/.test(s)) r.push({c:'00086',q:1});
+  return r;
+}
 
-  // ── [규칙 2] 보틀 자동 추가/제외
-  // 제품명에 "(전용) 보틀증정" 명시 → 무조건 추가
-  // 제품명에 없고 옵션이 "전용 보틀 선택: 선택안함" → 추가 안 함
-  const pnHasBottleGift=/전용\s*보틀\s*증정|보틀\s*증정/.test(pn);
-  const optBottleNone=/전용\s*보틀\s*선택\s*[:\s]+선택\s*안함/.test(opt);
-  if(pnHasBottleGift){
-    results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
-  } else if(!optBottleNone&&/보틀|트라이탄|쉐이커/.test(combined)){
-    results.push({c:'00035',n:'밀잇 전용 친환경 트라이탄 보틀',q:1});
-  }
-
-  // ── 고정 매핑 패턴
-  if(opt.includes('딸기맛 식사대용 쉐이크 450g 1통')) results.push({c:'00002',n:'밀잇 딸기맛 450g',q:1});
-  // 스타터팩: N종/N개입/N가지맛 모두 처리 (카페24 패키지 옵션 포함)
-  if(/스타터팩\s*7종|스타터팩\s*7개입|7가지\s*맛/.test(opt+' '+pn)) results.push({c:'00064',n:'밀잇 스타터팩(7개입) 40g',q:1});
-  if(/스타터팩\s*10종|스타터팩\s*10개입|10가지\s*맛/.test(opt+' '+pn)) results.push({c:'00066',n:'밀잇 스타터팩(10개입) 40g',q:1});
-  if(/스타터팩\s*5종|스타터팩\s*5개입|5가지\s*맛/.test(opt+' '+pn)) results.push({c:'00065',n:'밀잇 스타터팩(5개입) 40g',q:1});
-  if(opt.includes('2주갓생팩 13개입')){
-    results.push({c:'00011',n:'밀잇 초콜릿맛 40g',q:2},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',q:1},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',q:1},{c:'00009',n:'밀잇 바나나맛 40g',q:1},{c:'00005',n:'밀잇 미숫가루맛 40g',q:2},{c:'00025',n:'밀잇 흑임자맛 40g',q:1},{c:'00017',n:'밀잇 시리얼맛 40g',q:1},{c:'00015',n:'밀잇 커피맛 40g',q:1},{c:'00019',n:'밀잇 피스타치오맛 40g',q:2},{c:'00003',n:'밀잇 멜론맛 40g',q:1});
-    return results;
-  }
-  if(opt.includes('올인원팩 16개입')){
-    results.push({c:'00019',n:'밀잇 피스타치오맛 40g',q:2},{c:'00011',n:'밀잇 초콜릿맛 40g',q:2},{c:'00017',n:'밀잇 시리얼맛 40g',q:2},{c:'00005',n:'밀잇 미숫가루맛 40g',q:2},{c:'00021',n:'밀잇 말차초코쿠키맛 40g',q:1},{c:'00023',n:'밀잇 쿠키앤크림맛 40g',q:1},{c:'00009',n:'밀잇 바나나맛 40g',q:1},{c:'00003',n:'밀잇 멜론맛 40g',q:1},{c:'00025',n:'밀잇 흑임자맛 40g',q:2},{c:'00015',n:'밀잇 커피맛 40g',q:2});
-    return results;
-  }
-  if(opt.includes('포켓 3종')||opt.includes('+포켓 3종')||opt.includes('피쵸+초코+시리얼 각1포')){
-    results.push({c:'00019',n:'밀잇 피스타치오맛 40g',q:1},{c:'00011',n:'밀잇 초콜릿맛 40g',q:1},{c:'00017',n:'밀잇 시리얼맛 40g',q:1});
-  }
-  if(opt.includes('애사비')||opt.includes('젤리컷')) results.push({c:'00033',n:'밀잇 웰니스 애사비 젤리컷 8000',q:1});
-
-  const sizeCtx=detectSizeCtx(pn,pc,opt);
-  const parsed=[];
-  let m;
-  // 맛 접미사 정규화: "미숫가루맛" → "미숫가루" (dedup/pickSKU 불일치 방지)
-  const normFl=s=>String(s).replace(/맛$/,'').trim();
-
-  // ── 공통 Skip 상수 (함수 전체에서 공유)
-  const SKIP_SEG_EARLY=/^(선택\s*안함|보틀\s*필요\s*없음|없음|선택없음|보틀없음)$/i;
-  const SKIP_WORDS_EARLY=new Set(['선택','패키지','스타터팩','시즌','첫번째','두번째','포켓','대용량','용기','개당','플랜','세트','각','택']);
-
-  // ── STEP 2: 파싱 소스 준비
-  // <추가옵션> 태그가 있으면 해당 내용만 우선 사용
-  // 없으면 패키지 선택=... 구성설명 제거 후 파싱
-  const rawOpt=String(option);
-  const addOptMatch=rawOpt.match(/<추가옵션>(.+?)(?=<|$)/s);
-  const addInfoMatch=!addOptMatch&&rawOpt.match(/<(?:옵션정보|상품옵션)>(.+?)(?=<|$)/s);
-  let parseSrc=addOptMatch
-    ? addOptMatch[1].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()
-    : addInfoMatch
-      ? addInfoMatch[1].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()
-      : opt
-          .replace(/패키지\s*선택[=:][^,★<]+[,]?\s*/gi,'')
-          .replace(/★오직[^=]+=\s*선택안함\s*/gi,'')
-          .trim();
-  // 단독 특가= 이후 추가상품 내용 보충
-  const specMatch=opt.match(/단독\s*특가[=:]\s*(?!선택안함)(.+?)(?:,|<|$)/);
-  if(specMatch) parseSrc+=' '+specMatch[1].trim();
-  parseSrc=parseSrc.replace(/^[\s,]+/,'').trim();
-
-  const cpSrc=combined+' '+parseSrc;
-
-  // ── 정규식 규칙 그룹 1: 명시적 g 표기 (최우선)
-  // "맛이름 NNNg N개/통" 패턴
-  const gRe=/(?:NEW\s+|UPGRADE\s+|BEST\s+|HOT\s+)?(\S+?)맛?\s*(\d{2,4})\s*g\s*(\d+)\s*(?:개|통|포|팩|봉)/gi;
-  while((m=gRe.exec(parseSrc))!==null){
-    const sz=gToSize(m[2]);
-    if(!sz)continue;
-    // 선택N:/택N:/순서맛: 형식은 selRe/taekRe/ordRe가 처리 → gRe 중복 방지
-    const lb=parseSrc.slice(Math.max(0,m.index-30),m.index);
-    if(/(?:(?:선택|택)\s*\d+|(?:첫|두|세|네|다섯)번째\s*맛|구분|필수\s*선택)\s*[:\s/]+\s*[가-힣]*$/.test(lb))continue;
-    if(!parsed.some(p=>p.flavor===m[1]&&p.type===sz))
-      parsed.push({flavor:m[1],qty:parseInt(m[3]),type:sz});
-  }
-
-  // ── 규칙 그룹 2: 대용량 키워드
-  // "맛이름 대용량 N개" / "맛이름_대용량 N개" → 560g
-  // "맛이름 대용량 N개" / "맛이름 대용량 N통" / "맛이름_대용량 N개" → 560g
-  const bigRe=/(?:NEW\s+|UPGRADE\s+|BEST\s+|HOT\s+)?(\S+?)맛?[_\s]대용량\s*(\d+)\s*(?:개|통)/g;
-  while((m=bigRe.exec(parseSrc))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='560'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
-  }
-
-  // ── 규칙 그룹 2-b: "맛이름 x N" / "맛이름 × N" — N개 선택, 각 1개씩 (수량 곱셈 아님)
-  // fallback only: selRe/taekRe/ordRe가 이미 파싱했으면 중복 방지를 위해 실행 안 함
-  if(parsed.length===0){
-    const xSelRe=/([가-힣]{2,10})맛?\s*[xX×]\s*(\d+)/g;
-    while((m=xSelRe.exec(parseSrc))!==null){
-      const fl=m[1].replace(/맛$/,'').trim();
-      if(!SKIP_WORDS_EARLY.has(fl))
-        parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
-    }
-  }
-
-  // ── 규칙 그룹 3: 7개입 세트
-  // "맛이름 세트(7개입) N개" / "맛이름_7개 N개" → 7p
-  const setRe=/(\S+?)맛?\s*세트\s*\(?\s*7\s*개입\s*\)?\s*(\d+)\s*개/g;
-  while((m=setRe.exec(parseSrc))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
-  }
-  // "맛이름_7개 N개" 언더스코어 패턴 (카페24 패키지 옵션)
-  // parseSrc + opt 모두 스캔: 패키지선택= 제거로 parseSrc에서 첫 맛이 날아가는 경우 대비
-  const under7Re=/([가-힣a-zA-Z]+)[_]7개\s+(\d+)\s*개/g;
-  for(const u7src of [parseSrc,opt]){
-    under7Re.lastIndex=0;
-    while((m=under7Re.exec(u7src))!==null){
-      if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
-        parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
-    }
-  }
-  // "N개맛 선택=미숫가루_7개 1개, 시리얼_7개 1개" — "맛 선택=" 키워드로 특정
-  // (generic "선택="은 "패키지 선택=" 까지 잡아 첫 맛을 seg[0]에 포함시켜 ms7 불일치)
-  const selEqM=opt.match(/맛\s*선택\s*=\s*(.+)/);
-  if(selEqM){
-    selEqM[1].split(',').map(s=>s.trim()).forEach(seg=>{
-      const ms7=seg.match(/^([가-힣]{2,10})_7개\s+(\d+)\s*개$/);
-      if(ms7&&!parsed.some(p=>p.flavor===ms7[1]&&p.type==='7p'))
-        parsed.push({flavor:ms7[1],qty:parseInt(ms7[2]),type:'7p'});
-    });
-  }
-  // "포켓 7개입  맛이름_7개" → 7p × 1 (수량 미표기 = 1개)
-  const pkt7Re=/포켓\s*7개입\s+([가-힣a-zA-Z]+)_7개/g;
-  while((m=pkt7Re.exec(parseSrc))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
-      parsed.push({flavor:m[1],qty:1,type:'7p'});
-  }
-
-  // ── 규칙 그룹 4: 파우치/낱포/낱개 → 40g
-  // "포켓형_맛이름 N개"
-  const pktRe=/포켓형[_](\S+?)\s*(\d+)\s*개/g;
-  while((m=pktRe.exec(parseSrc))!==null)
-    parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
-  // "맛이름 낱포 N개"
-  const npRe=/(\S+?)\s*낱포\s*(\d+)\s*개/g;
-  while((m=npRe.exec(opt))!==null)
-    parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
-  // "맛이름 낱개 N개" → 40g × N
-  const naRe=/([가-힣]{2,10})\s*낱개\s*(\d+)\s*개/g;
-  while((m=naRe.exec(cpSrc))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]&&p.type==='40'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
-  }
-
-  // ── 규칙 그룹 5: 용기/통 명시
-  // "맛이름 용기 N통"
-  const contRe=/(\S+?)\s*용기\s*(\d+)\s*통/g;
-  while((m=contRe.exec(opt))!==null)
-    parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
-
-  // ── 규칙 그룹 6: 선택N/택N 엄격 분리 — 선택번호마다 각각 독립 상품
-  // 중복 제거 없음: 선택1=딸기, 선택2=딸기 → 딸기 2통으로 누산
-  // (SKIP_SEG_EARLY, SKIP_WORDS_EARLY는 함수 상단에 정의됨)
-  // "맛 선택1:초콜릿 1통" / "맛 선택2:흑임자 560g 1통" — g 표기 포함 대응, 맛 접두어 선택적
-  const selRe=/(?:맛\s*)?선택\s*\d+\s*[:\s/]+\s*([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+(\d{3})\s*g)?(?:\s+용기)?\s+(\d+)\s*통/g;
-  while((m=selRe.exec(opt))!==null){
-    const fl=m[1].replace(/시즌\d+/,'').trim();
-    const sz=m[2]?gToSize(m[2]):sizeCtx;
-    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[3]),type:sz});
-  }
-  // "택1:시리얼 1통, 택2:흑임자 560g 1통" → 택번호별 각 상품
-  const taekRe=/택\s*\d+\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+(\d{3})\s*g)?(?:\s+용기)?\s+(\d+)\s*통/g;
-  while((m=taekRe.exec(opt))!==null){
-    const fl=m[1].replace(/시즌\d+/,'').trim();
-    const sz=m[2]?gToSize(m[2]):sizeCtx;
-    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[3]),type:sz});
-  }
-  // "첫번째 맛:미숫가루맛 560g 1통, 두번째 맛:미숫가루맛 1통" → 순서 키워드별 각 상품
-  const ordRe=/(?:첫번째|두번째|세번째|네번째|다섯번째)\s*맛\s*[:\s]+([가-힣]{2,10})(?:맛)?(?:\s+시즌\d+)?(?:\s+(\d{3})\s*g)?(?:\s+용기)?\s+(\d+)\s*통/g;
-  while((m=ordRe.exec(opt))!==null){
-    const fl=m[1].replace(/맛$/,'').replace(/시즌\d+/,'').trim();
-    const sz=m[2]?gToSize(m[2]):sizeCtx;
-    if(!SKIP_WORDS_EARLY.has(fl)) parsed.push({flavor:fl,qty:parseInt(m[3]),type:sz});
-  }
-  // 지그재그 "구분:딸기맛 450g 1통" → g 표기 우선, 없으면 sizeCtx
-  const gudanRe=/구분\s*[:\s]+(\S+?)맛?\s*(?:(\d{2,4})\s*g\s*)?(\d+)\s*통/g;
-  while((m=gudanRe.exec(opt))!==null){
-    const sz=m[2]?gToSize(m[2]):null;
-    if(!parsed.some(p=>p.flavor===m[1]))
-      parsed.push({flavor:m[1],qty:parseInt(m[3]),type:sz||sizeCtx});
-  }
-  const reqRe=/필수\s*선택[:\s]+(?:\[BEST\]\s*)?(\S+?)(?:\s+대용량|\s+560g)?\s+(\d+)\s*통/g;
-  while((m=reqRe.exec(opt))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
-  }
-  const kRe=/맛\s*선택[:\s]+(\S+?)맛\s*(\d+)\s*개(?!입)/g;
-  while((m=kRe.exec(opt))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
-  }
-  const zpRe=/7개입\s*맛선택[:\s]+(\S+?)\s+7개입/g;
-  while((m=zpRe.exec(opt))!==null){
-    if(!parsed.some(p=>p.flavor===m[1]))
-      parsed.push({flavor:m[1],qty:1,type:'7p'});
-  }
-  // "맛선택2: 커피 7개입 2세트" → 커피 7p × 2 (1세트 = 7개입 1묶음)
-  const kSeteRe=/맛\s*선택\d*\s*[:\s]+([가-힣]{2,10})(?:맛)?\s+7\s*개입\s+(\d+)\s*세트/g;
-  while((m=kSeteRe.exec(opt))!==null){
-    parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'7p'});
-  }
-
-  // ── 규칙 그룹 7: 쿠팡 콤마 패턴
-  // [규칙 1] "맛이름맛, NNNg, N개" → g 기반 분류
-  const cpRe=/(\S+?)맛[^,]*,\s*(\d{2,4})\s*g\s*,\s*(\d+)\s*개/g;
-  let cpM;
-  while((cpM=cpRe.exec(cpSrc))!==null){
-    const sz=gToSize(cpM[2]);
-    if(sz&&!parsed.some(p=>p.flavor===cpM[1]&&p.type===sz))
-      parsed.push({flavor:cpM[1],qty:parseInt(cpM[3]),type:sz});
-  }
-  // [규칙 3] "맛이름맛 40g N개" → 파우치
-  const pouchRe=/(\S+?)맛[^,]*,?\s*40\s*g\s*,?\s*(\d+)\s*개/g;
-  let pM;
-  while((pM=pouchRe.exec(cpSrc))!==null){
-    if(!parsed.some(p=>p.flavor===pM[1]&&p.type==='40'))
-      parsed.push({flavor:pM[1],qty:parseInt(pM[2]),type:'40'});
-  }
-
-  // ── 규칙 그룹 8: 슬래시 분리 → [1+1] 유형
-  // "맛A N통 / 맛B N통" → 각 1개씩 (선택안함·보틀 필요 없음 세그먼트 스킵)
-  const SKIP_SEG=SKIP_SEG_EARLY;
-  const SKIP_WORDS=SKIP_WORDS_EARLY;
-
-  // ── [1+1] 채널별 추가 패턴
-
-  // 카카오톡스토어: "맛 선택 (N)/맛이름 [N통]" — 콤마 구분 다중선택
-  const kakaoSelRe=/맛\s*선택\s*\(\d+\)\s*\/\s*([가-힣]{2,10})(?:\s+\S+?)?(?:\s+(\d+)\s*통)?(?=[,<]|$)/g;
-  while((m=kakaoSelRe.exec(opt))!==null){
-    const fl=m[1].replace(/맛$/,'').trim();
-    if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl))
-      parsed.push({flavor:fl,qty:m[2]?parseInt(m[2]):1,type:sizeCtx});
-  }
-
-  // 카카오톡스토어: "[Ng/N통] 맛A N통+맛B N통" — + 연결 분리
-  const boxRe=/\[(\d{2,4})g\/\d+통\]\s*([^,<\[]+)/g;
-  while((m=boxRe.exec(opt))!==null){
-    const sz=gToSize(m[1]);
-    if(!sz) continue;
-    m[2].split('+').forEach(seg=>{
-      const mf=seg.match(/([가-힣]{2,10})/);
-      const mq=seg.match(/(\d+)\s*통/);
-      if(mf&&!SKIP_WORDS.has(mf[1])&&!parsed.some(p=>p.flavor===mf[1]&&p.type===sz))
-        parsed.push({flavor:mf[1],qty:mq?parseInt(mq[1]):1,type:sz});
-    });
-  }
-
-  // 지그재그 혼합사이즈: "식단관리 N통:맛A 대용량 N통,식사대용 N통:맛B N통"
-  const mix560Re=/(?:식단관리|대용량)[^:,]*:\s*(\S+?)(?:\s+대용량|\s+560g)?\s+(\d+)\s*통/g;
-  while((m=mix560Re.exec(opt))!==null){
-    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='560'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'560'});
-  }
-  const mix450Re=/식사대용[^:,]*:\s*(\S+?)\s+(\d+)\s*통/g;
-  while((m=mix450Re.exec(opt))!==null){
-    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='450'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'450'});
-  }
-
-  // ── Fix #3: 낱개 7개입 (bare, 세트 키워드 없음): "멜론 7개입" → 7p
-  const bareSetRe=/([가-힣]{2,10})\s+7\s*개입/g;
-  while((m=bareSetRe.exec(parseSrc))!==null){
-    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='7p'))
-      parsed.push({flavor:m[1],qty:1,type:'7p'});
-  }
-
-  // ── Fix #4: N포/N포씩 단위 → 40g
-  const poRe=/([가-힣]{2,10})\s*(\d+)\s*포(?:씩)?(?!\s*\d)/g;
-  while((m=poRe.exec(parseSrc))!==null){
-    if(!SKIP_WORDS.has(m[1])&&!parsed.some(p=>p.flavor===m[1]&&p.type==='40'))
-      parsed.push({flavor:m[1],qty:parseInt(m[2]),type:'40'});
-  }
-
-  // ── [7+3] 번들 고정 파싱: 7개입 세트 1묶음 + 낱포 3개
-  if(/\[7\+3\]/.test(combined)){
-    parseSrc.split('/').map(s=>s.trim()).filter(s=>s).forEach(seg=>{
-      const m7=seg.match(/([가-힣]{2,10})\s*7개입/);
-      if(m7&&!parsed.some(p=>p.flavor===m7[1]&&p.type==='7p'))
-        parsed.push({flavor:m7[1],qty:1,type:'7p'});
-      const m3=seg.match(/([가-힣]{2,10})\s*낱포\s*(\d+)\s*개/);
-      if(m3&&!parsed.some(p=>p.flavor===m3[1]&&p.type==='40'))
-        parsed.push({flavor:m3[1],qty:parseInt(m3[2]),type:'40'});
-    });
-  }
-
-  // ── 슬래시 분리: 맛A N통 / 맛B N통 ([1+1] 유형), 선택안함·보틀없음 스킵
-  const slashSegs=parseSrc.split('/').map(s=>s.trim()).filter(s=>s&&!SKIP_SEG.test(s));
-  if(slashSegs.length>=2){
-    slashSegs.forEach(seg=>{
-      // "맛이름 N통" (수량 명시)
-      const mT=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})(?:[_\s](?:대용량|식사대용))?\s+(\d+)\s*통$/);
-      if(mT){
-        const fl=normFl(mT[1]),qty=parseInt(mT[2]);
-        const t=/대용량/.test(seg)?'560':sizeCtx==='450'?'450':'560';
-        parsed.push({flavor:fl,qty,type:t});
-        return;
-      }
-      // "맛이름" bare (수량 없음, 에이블리 <옵션정보> 등)
-      const mBare=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})(?:[_\s]대용량)?$/);
-      if(mBare){const fl=normFl(mBare[1]);if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl)){
-        const t=/대용량/.test(seg)?'560':sizeCtx;
-        parsed.push({flavor:fl,qty:1,type:t});
-      }}
-    });
-  }
-
-  // ── 콤마 분리: 각 세그먼트 독립 파싱 (추가옵션 "A N개, B N개" 형태)
-  const commaSegs=parseSrc.split(',').map(s=>s.trim()).filter(s=>s&&!SKIP_SEG.test(s));
-  if(commaSegs.length>=2){
-    commaSegs.forEach(seg=>{
-      // 맛이름 대용량 N개/통
-      const mBig=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})[_\s]대용량\s+(\d+)\s*(?:개|통)$/);
-      if(mBig){const fl=normFl(mBig[1]);if(!parsed.some(p=>p.flavor===fl&&p.type==='560')){parsed.push({flavor:fl,qty:parseInt(mBig[2]),type:'560'});return;}}
-      // 맛이름 세트(7개입) N개
-      const mSet=seg.match(/^([가-힣]{2,10})맛?\s*세트\s*\(?\s*7\s*개입\s*\)?\s*(\d+)\s*개$/);
-      if(mSet){const fl=normFl(mSet[1]);if(!parsed.some(p=>p.flavor===fl&&p.type==='7p')){parsed.push({flavor:fl,qty:parseInt(mSet[2]),type:'7p'});return;}}
-      // 맛이름 N개 or N통 (일반)
-      const mG=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})\s+(\d+)\s*(개|통)(?!입)$/);
-      if(mG){const fl=normFl(mG[1]);if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl))parsed.push({flavor:fl,qty:parseInt(mG[2]),type:sizeCtx});}
-    });
-  }
-
-  // ── 플러스(+) 분리: "피스타치오 1통+바나나 1통+미숫가루 1통" / "[딸기1통+보틀증정]"
-  // N통 = 560g, 공백 없는 "맛이름N통"도 처리, 비맛 세그먼트는 무시
-  if(parseSrc.includes('+')){
-    parseSrc.replace(/[\[\]]/g,'').split('+').map(s=>s.trim()).filter(s=>s).forEach(seg=>{
-      const mP=seg.match(/^(?:NEW\s+|UPGRADE\s+|BEST\s+)?([가-힣]{2,10})맛?\s*(\d+)\s*통$/);
-      if(mP){const fl=normFl(mP[1]);if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl&&p.type==='560'))parsed.push({flavor:fl,qty:parseInt(mP[2]),type:'560'});}
-    });
-  }
-
-  // ── 규칙 그룹 9: 일반 "맛이름 N통" / "맛이름 N개" (중간 폴백)
-  // ── 규칙 그룹 10: 일반 폴백 (위 규칙 미매핑 시)
-  // "맛이름 N통" → sizeCtx × N
-  if(parsed.length===0){
-    const tongRe=/([가-힣]{2,10})\s+(\d+)\s*통/g;
-    while((m=tongRe.exec(parseSrc))!==null){
-      const fl=m[1];
-      if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl)){
-        const t=/대용량/.test(parseSrc.slice(Math.max(0,m.index-3),m.index+25))?'560':sizeCtx;
-        parsed.push({flavor:fl,qty:parseInt(m[2]),type:t});
+// ── 색팩 () 안 분해 (규칙서 §7-1)
+function expandColorPack(content, pname){
+  const out=[];
+  // "시리얼5+말차5+초코5+커피5+바나나5+피스타5" 또는 "시리얼 5+말차 5..."
+  content.split(/[+,]/).forEach(p=>{
+    const t=p.trim();
+    // 약어 매칭 (긴 키 우선)
+    let fl=null, q=null;
+    for(const k of PACK_KEYS_BY_LEN){
+      if(t.startsWith(k)){
+        fl=PACK_FLAVOR_SHORT[k];
+        const rest=t.slice(k.length).trim();
+        const qm=rest.match(/(\d+)/);
+        q=qm?parseInt(qm[1],10):null;
+        break;
       }
     }
-  }
-  // "맛이름 N개" → sizeCtx × N (X N개 = X 맛 N수량)
-  if(parsed.length===0){
-    const gaeRe=/([가-힣]{2,10})\s+(\d+)\s*개(?!입)/g;
-    while((m=gaeRe.exec(parseSrc))!==null){
-      const fl=m[1];
-      if(!SKIP_WORDS.has(fl)&&!parsed.some(p=>p.flavor===fl))
-        parsed.push({flavor:fl,qty:parseInt(m[2]),type:sizeCtx});
+    if(fl){
+      const size=detectSize('40g', pname)==='7p'?'7p':'40';
+      const sku=lookupSKU(fl,size);
+      if(sku)out.push({c:sku.c,q:q||1});
     }
-  }
-
-  // ── 최종 폴백
-  if(parsed.length===0){const spRe=/특가[:\s]+(?:신규맛)?(\S+?)\s+(?:포켓|대용량)?\s*(\d+)\s*(?:포|통|개)/;const spM=opt.match(spRe);if(spM) parsed.push({flavor:spM[1],qty:parseInt(spM[2]),type:'40'})}
-  if(parsed.length===0){const kmRe=/맛[:\s]+(\S+)/;const kmM=opt.match(kmRe);if(kmM){const fl=kmM[1].replace(/,$/,'');parsed.push({flavor:fl,qty:1,type:sizeCtx})}}
-
-  parsed.forEach(p=>{
-    const sku=pickSKU(p.flavor,p.type);
-    if(!sku)return;
-    const ex=results.find(r=>r.c===sku.c);
-    if(ex)ex.q+=p.qty;else results.push({c:sku.c,n:sku.n,q:p.qty});
   });
-  return results;
+  return out;
+}
+
+// ── 추가옵션 부분에서 맛 토큰 추출 → SKU 행 생성
+function extractTokensToSKUs(addOptText, pname){
+  const out=[];
+  const text=stripNoise(addOptText);
+  if(!text)return out;
+  // 콤마 또는 슬래시로 분리
+  const tokens=text.split(/[,/]/).map(t=>t.trim()).filter(t=>t.length>0);
+  for(const tok of tokens){
+    const clean=stripNoise(tok);
+    if(!clean)continue;
+    if(/^(선택안함|선택\s*안함|선택없음|보틀\s*필요\s*없음|없음|-)$/.test(clean))continue;
+    // 색팩처럼 ()/[] 안 구성으로 보이면 스킵 (별도 처리)
+    if(/[\[\(]/.test(clean))continue;
+    const fl=normFlavor(clean);
+    if(!fl)continue;
+    const size=detectSize(clean, pname);
+    const qty=extractQty(clean);
+    const sku=lookupSKU(fl,size);
+    if(sku)out.push({c:sku.c,q:qty});
+  }
+  return out;
+}
+
+// ── parseOption v4 (밀잇_주문옵션_파싱규칙_v1.md STEP 1~7)
+function parseOption(option, prodName, prodCode, orderQty){
+  const opt=String(option||''); const pn=String(prodName||''); const pc=String(prodCode||'');
+  const oQty=Number(orderQty)||1;
+  const out=[];
+  if(!opt&&!pn)return [];
+
+  // STEP 1: 구조 정규화 — <옵션>...<추가옵션>... 분리
+  let mainPart=opt, addPart='';
+  const opM=opt.match(/<옵션>(.*?)(?=<추가옵션>|<옵션정보>|<옵션명>|$)/s);
+  const adM=opt.match(/<추가옵션>(.*?)(?=<|$)/s);
+  const infoM=opt.match(/<(?:옵션정보|옵션명)>(.*?)(?=<|$)/s);
+  if(opM){ mainPart=opM[1]; }
+  if(adM){ addPart=adM[1]; }
+  else if(infoM){ addPart=infoM[1]; mainPart=opt.replace(/<옵션정보>.*$|<옵션명>.*$/s,'') }
+
+  // STEP 6: 부가 SKU (단독특가/패키지 묶음) — mainPart 기준
+  const dealSkus=applySpecialDeal(mainPart||opt);
+  const bundleSkus=applyPackageBundle(mainPart||opt);
+
+  // STEP 5: 색팩 () 안 구성 펼치기
+  const packMatch=(mainPart||opt).match(/[(\[]([^()\[\]]+)[)\]]/);
+  let colorSkus=[];
+  if(packMatch && /\d+\+/.test(packMatch[1]) && !/맛\s*선택/.test(packMatch[1])){
+    colorSkus=expandColorPack(packMatch[1], pn);
+  }
+
+  // STEP 3-4: 추가옵션 토큰 → SKU
+  let mainSkus=[];
+  if(addPart){
+    mainSkus=extractTokensToSKUs(addPart, pn);
+  }
+  if(!mainSkus.length && !colorSkus.length && !bundleSkus.length){
+    // 추가옵션이 없을 때: opt 전체에서 토큰 추출 시도 (스마트스토어/지그재그/에이블리 등)
+    // <상품명>...<옵션정보> 또는 맛 선택1:..., 맛 선택2:... 같은 형식
+    let src=opt.replace(/<상품명>.*?(?=<옵션정보>|<옵션명>|$)/s,'').replace(/<옵션정보>|<옵션명>|<옵션>|<추가옵션>/g,' ');
+    // 맛 선택1:X 1통, 맛 선택2:Y 1통
+    src=src.replace(/맛\s*선택\d*\s*[:=]/g,',');
+    mainSkus=extractTokensToSKUs(src, pn);
+  }
+
+  // STEP 7: 합산 (같은 코드는 한 행으로)
+  const acc=new Map();
+  function addRow(items){items.forEach(r=>{if(!r||!r.c)return;acc.set(r.c,(acc.get(r.c)||0)+(r.q||1))})}
+  addRow(bundleSkus); addRow(colorSkus); addRow(mainSkus); addRow(dealSkus);
+
+  // 토스쇼핑류: 옵션이 빈약하면 PNAME에서 직접 매칭 (1통, 2통 등)
+  if(!acc.size){
+    const fl=normFlavor(pn);
+    if(fl){
+      const size=detectSize('', pn);
+      const sku=lookupSKU(fl,size);
+      const qm=pn.match(/(\d+)\s*통/);
+      if(sku)acc.set(sku.c,qm?parseInt(qm[1],10):1);
+    }
+  }
+
+  // SKU 행 빌드 (오더수량 곱은 호출부 run()에서 결정)
+  for(const [c,q] of acc){
+    out.push({c,n:SKU_CATALOG_ALL[c]||('코드 '+c),q});
+  }
+  return out;
 }
 
 // ── 옵션/상품명 정규화 (정답 기반 룰셋과 raw 모두에 동일 적용)
