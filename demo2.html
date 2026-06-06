@@ -227,6 +227,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div></div>
 
 <div class="box hidden" id="ds"><div class="box-h"><span>🔬 정답 대조 리포트</span><span id="accHist" class="acc-meta">자동 결과 ↔ 담당자 정답</span></div><div class="box-b">
+<div id="coverageBanner" class="note" style="border-left-color:var(--a);background:#eef2ff;color:#3730a3;margin-bottom:14px;font-size:12px;display:none"></div>
 <div class="sg6">
 <div class="sc"><div class="l">정확도</div><div class="v g" id="d0">0%</div></div>
 <div class="sc"><div class="l">MATCH</div><div class="v g" id="d1">0</div></div>
@@ -313,7 +314,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.5';
+const APP_VERSION='V3.6';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1080,6 +1081,22 @@ function runDiff(){
   document.getElementById('d3').textContent=cnt.SIZE_DIFF;
   document.getElementById('d4').textContent=cnt.MISSING;
   document.getElementById('d5').textContent=cnt.EXTRA;
+  // 커버리지 배너: raw가 정답 옵션을 얼마나 포함하는지 (범위 차이 안내)
+  const cb=document.getElementById('coverageBanner');
+  if(cb){
+    const tTotal=truthBuckets.size, covered=interKeys.length;
+    const truthRows=[...truthBuckets.values()].reduce((s,t)=>s+t.skus.size,0);
+    const autoRows=MR.length;
+    if(scopeT>0){
+      cb.style.display='block';
+      cb.innerHTML=`<b>📊 범위 안내:</b> 업로드한 raw는 정답의 고유 옵션 <b>${tTotal}개 중 ${covered}개</b>만 포함합니다. `+
+        `정답 전용 <b>${scopeT}개 옵션</b>(raw에 없는 주문)은 비교 대상이 아니라 정확도에서 제외됩니다.<br>`+
+        `<span style="color:#6b7280">· 자동 출력 ${autoRows}행 (raw ${OD.length}주문의 완전한 펼침) · 정답 ${truthRows}행(${tTotal}옵션) → 정답 전체 행수에 도달하려면 <b>정답과 동일 범위의 raw 전체</b>를 업로드하세요.</span>`;
+    }else{
+      cb.style.display='block';
+      cb.innerHTML=`<b>✓ 범위 일치:</b> raw가 정답 옵션 전체를 포함합니다 (교집합 ${covered}/${tTotal}옵션).`;
+    }
+  }
   document.getElementById('ds').classList.remove('hidden');
   renderDiff();
   recordAcc(cnt.MATCH,realTotal);
