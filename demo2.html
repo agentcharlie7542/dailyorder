@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>밀잇 주문 매핑 v3 — 파싱규칙 내장</title>
+<title>밀잇 주문 매핑 V3.1 — 파싱규칙 내장</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -138,7 +138,7 @@ tr.group-edited:hover td{background:#fef9c3}
 <body>
 <div class="hdr">
   <img src="logo.png" alt="MEAL IT">
-  <div><h1>주문 매핑 v3 — 내장 파싱규칙</h1><p>학습규칙(localStorage) → 내장 파싱엔진(맛·사이즈·수량 자동 추출) → 미매핑 학습 누적</p></div>
+  <div><h1>주문 매핑 <span id="verBadge">V3.1</span> — 내장 파싱규칙</h1><p>학습규칙(localStorage) → 내장 파싱엔진(맛·사이즈·수량 자동 추출) → 미매핑 학습 누적</p></div>
 </div>
 <div class="c">
 
@@ -313,6 +313,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
+const APP_VERSION='V3.1';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -883,7 +884,7 @@ function run(){
   if(!ITER)ITER=1;
   log(`매핑 시작 (회차 ${ITER})...`,'i');
   MR=[];UR=[];DIFF=[];
-  log(`내장규칙: ${BUILTIN_RULES.length}개 / 사용자규칙: ${loadRules().length}개 / 파싱엔진 v3`,'i');
+  log(`내장규칙: ${BUILTIN_RULES.length}개 / 사용자규칙: ${loadRules().length}개 / 파싱엔진 ${APP_VERSION}`,'i');
 
   let okCount=0,customCount=0;
   OD.forEach((o,idx)=>{
@@ -1412,6 +1413,8 @@ ${skuCatalogSummary()}
 
 // 초기화 시 설정 복원
 window.addEventListener('DOMContentLoaded',()=>{
+  const vb=document.getElementById('verBadge');if(vb)vb.textContent=APP_VERSION;
+  document.title=`밀잇 주문 매핑 ${APP_VERSION} — 파싱규칙 내장`;
   const cfg=loadOllamaCfg();
   if(document.getElementById('olm_on'))document.getElementById('olm_on').checked=!!cfg.on;
   if(cfg.url&&document.getElementById('olm_url'))document.getElementById('olm_url').value=cfg.url;
