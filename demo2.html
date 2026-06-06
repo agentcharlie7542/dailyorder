@@ -313,7 +313,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.3';
+const APP_VERSION='V3.4';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -963,21 +963,28 @@ function runDiff(){
   const SKU_REV=buildSkuReverseIndex();
   DIFF=[];
 
-  // 1) 자동 결과 묶음 집계: (정규화 상품명 + 옵션) 키
-  const autoBuckets=new Map(); // bk → {skus: Map(sku→qty), ctx}
+  // 1) 자동: 주문 단위로 SKU 집계 → (정규화 상품명+옵션) 버킷마다 "대표 1주문" 구성 사용
+  //    (같은 옵션이 raw에 여러 건이어도 합산하지 않음 — 정답은 옵션별 1단위 매핑표이므로)
+  const orderSkus=new Map(); // orderKey → Map(sku→qty)
+  const orderHead=new Map();
   MR.forEach(r=>{
-    const head=r._m?r:MR.find(x=>x._orderKey===r._orderKey&&x._m);
-    if(!head)return;
-    const pnN=normPnJS(head.pn||'');
-    const optN=normOptJS(head.opt||'',head.pn||'');
-    const bk=pnN+'|||'+optN;
-    if(!autoBuckets.has(bk))autoBuckets.set(bk,{skus:new Map(),ctx:{v:head.v,pc:head.pc,pn:head.pn,opt:head.opt,pnNorm:pnN,optNorm:optN,mg:head.mg||head._orderKey,no:head._orderNo}});
-    const g=autoBuckets.get(bk);
+    const ok=r._orderKey;
+    if(!orderSkus.has(ok))orderSkus.set(ok,new Map());
     const sc=padCode(r.sc);
-    g.skus.set(sc,(g.skus.get(sc)||0)+(Number(r.q)||0));
+    orderSkus.get(ok).set(sc,(orderSkus.get(ok).get(sc)||0)+(Number(r.q)||0));
+    if(r._m||!orderHead.has(ok))orderHead.set(ok,r);
   });
+  const autoBuckets=new Map(); // bk → {skus, ctx, count}
+  for(const [ok,skus] of orderSkus){
+    const head=orderHead.get(ok)||{};
+    const pnN=normPnJS(head.pn||''), optN=normOptJS(head.opt||'',head.pn||'');
+    const bk=pnN+'|||'+optN;
+    if(!autoBuckets.has(bk)){
+      autoBuckets.set(bk,{skus:new Map(skus),ctx:{v:head.v,pc:head.pc,pn:head.pn,opt:head.opt,pnNorm:pnN,optNorm:optN,mg:head.mg||ok,no:head._orderNo},count:1});
+    }else{ autoBuckets.get(bk).count++; }
+  }
 
-  // 2) 정답 결과 묶음 집계 (forward-fill 적용된 vendorPn + option)
+  // 2) 정답: (forward-fill된) vendorPn+option 버킷, SKU 수량 (옵션별 1단위 매핑)
   const truthBuckets=new Map();
   RD.forEach(r=>{
     const h=r._hdr;
@@ -988,29 +995,27 @@ function runDiff(){
     const sc=padCode(r[h.skuCode]);
     if(!sc)return;
     const qty=Number(r[h.qty])||0;
-    const pnN=normPnJS(vpn);
-    const optN=normOptJS(vopt,vpn);
+    const pnN=normPnJS(vpn), optN=normOptJS(vopt,vpn);
     const bk=pnN+'|||'+optN;
     if(!truthBuckets.has(bk))truthBuckets.set(bk,{skus:new Map(),ctx:{v:vd,pc:vpc,pn:vpn,opt:vopt,pnNorm:pnN,optNorm:optN}});
-    const g=truthBuckets.get(bk);
-    g.skus.set(sc,(g.skus.get(sc)||0)+qty);
+    truthBuckets.get(bk).skus.set(sc,(truthBuckets.get(bk).skus.get(sc)||0)+qty);
   });
 
-  // 3) Diff: 묶음 키 합집합 순회, 각 묶음 안에서 SKU별 수량 비교
-  const allKeys=new Set([...autoBuckets.keys(),...truthBuckets.keys()]);
-  allKeys.forEach(bk=>{
-    const a=autoBuckets.get(bk);
-    const t=truthBuckets.get(bk);
-    const ctx=(a&&a.ctx)||(t&&t.ctx)||{};
-    const allSkus=new Set([...(a?a.skus.keys():[]),...(t?t.skus.keys():[])]);
-    const rows=[...allSkus].map(sku=>({sku,aq:(a&&a.skus.get(sku))||0,tq:(t&&t.skus.get(sku))||0}));
-    // SIZE_DIFF 후처리: 같은 맛 다른 사이즈 한쌍 → 묶기
+  // 3) 버킷 분류: 교집합(정확도 산정) / 정답전용·raw전용(범위차이, scope)
+  const interKeys=[...autoBuckets.keys()].filter(k=>truthBuckets.has(k));
+  const truthOnly=[...truthBuckets.keys()].filter(k=>!autoBuckets.has(k));
+  const autoOnly=[...autoBuckets.keys()].filter(k=>!truthBuckets.has(k));
+
+  // 3-1) 교집합 버킷: SKU별 정밀 비교
+  interKeys.forEach(bk=>{
+    const a=autoBuckets.get(bk), t=truthBuckets.get(bk), ctx=a.ctx;
+    const allSkus=new Set([...a.skus.keys(),...t.skus.keys()]);
+    const rows=[...allSkus].map(sku=>({sku,aq:a.skus.get(sku)||0,tq:t.skus.get(sku)||0}));
     const consumed=new Set();
     rows.forEach((rA,iA)=>{
       if(consumed.has(iA))return;
       if(rA.aq===0&&rA.tq>0){
-        const ti=SKU_REV[rA.sku];
-        if(!ti)return;
+        const ti=SKU_REV[rA.sku]; if(!ti)return;
         for(let iB=0;iB<rows.length;iB++){
           if(consumed.has(iB)||iA===iB)continue;
           const rB=rows[iB];
@@ -1038,14 +1043,29 @@ function runDiff(){
     });
   });
 
-  // 4) 요약 로그
+  // 3-2) 정답 전용 (raw에 없는 주문) — scope, 정확도 제외
+  truthOnly.forEach(bk=>{
+    const t=truthBuckets.get(bk);
+    for(const [sku,tq] of t.skus)
+      DIFF.push({kind:'MISSING',scope:true,key:bk,sc:sku,sn:SKU_CATALOG_ALL[sku]||'',autoQty:0,truthQty:tq,...t.ctx});
+  });
+  // 3-3) raw 전용 (정답에 없는 주문) — scope, 정확도 제외
+  autoOnly.forEach(bk=>{
+    const a=autoBuckets.get(bk);
+    for(const [sku,aq] of a.skus)
+      DIFF.push({kind:'EXTRA',scope:true,key:bk,sc:sku,sn:SKU_CATALOG_ALL[sku]||'',autoQty:aq,truthQty:0,...a.ctx});
+  });
+
+  // 4) 정확도: 교집합 버킷(범위 일치)만 산정
+  const real=DIFF.filter(d=>!d.scope);
   const cnt={MATCH:0,QTY_DIFF:0,SIZE_DIFF:0,MISSING:0,EXTRA:0};
-  DIFF.forEach(d=>{cnt[d.kind]++});
-  const total=DIFF.length||1;
-  const acc=(cnt.MATCH/total*100).toFixed(1);
-  const inter=[...allKeys].filter(k=>autoBuckets.has(k)&&truthBuckets.has(k)).length;
-  log(`정답 대조: 자동 ${autoBuckets.size}묶음 vs 정답 ${truthBuckets.size}묶음 · 교집합 ${inter}묶음 · 키매칭=정규화(상품명+옵션)`,'i');
-  log(`Diff: MATCH ${cnt.MATCH} / QTY_DIFF ${cnt.QTY_DIFF} / SIZE_DIFF ${cnt.SIZE_DIFF} / MISSING ${cnt.MISSING} / EXTRA ${cnt.EXTRA} · 정확도 ${acc}%`, cnt.MATCH===DIFF.length?'ok':'w');
+  real.forEach(d=>{cnt[d.kind]++});
+  const realTotal=real.length||1;
+  const acc=(cnt.MATCH/realTotal*100).toFixed(1);
+  const scopeT=truthOnly.length, scopeA=autoOnly.length;
+  log(`정답 대조: 자동 ${autoBuckets.size}묶음 vs 정답 ${truthBuckets.size}묶음 · 교집합 ${interKeys.length}묶음 (정확도 산정 대상)`,'i');
+  if(scopeT||scopeA)log(`범위차이(정확도 제외): 정답전용 ${scopeT}묶음 · raw전용 ${scopeA}묶음`,'w');
+  log(`Diff(교집합): MATCH ${cnt.MATCH} / QTY ${cnt.QTY_DIFF} / SIZE ${cnt.SIZE_DIFF} / MISSING ${cnt.MISSING} / EXTRA ${cnt.EXTRA} · 정확도 ${acc}%`, cnt.MATCH===real.length?'ok':'w');
 
   document.getElementById('d0').textContent=acc+'%';
   document.getElementById('d1').textContent=cnt.MATCH;
@@ -1055,7 +1075,7 @@ function runDiff(){
   document.getElementById('d5').textContent=cnt.EXTRA;
   document.getElementById('ds').classList.remove('hidden');
   renderDiff();
-  recordAcc(cnt.MATCH,DIFF.length);
+  recordAcc(cnt.MATCH,realTotal);
   return DIFF;
 }
 
@@ -1074,15 +1094,20 @@ function renderDiff(){
     return d.kind===DIFF_FILTER;
   });
   if(!rows.length){tb.innerHTML='<tr><td colspan="11" class="empty">해당 필터 결과 없음</td></tr>';return}
-  // 그룹 단위로 학습 버튼을 첫 행에만 노출
+  // 그룹 단위로 학습 버튼을 첫 행에만 노출 (키는 HTML에 넣지 않고 window 인덱스로 참조 → 특수문자 안전)
   const seenKey=new Set();
+  window.DIFF_RENDER_KEYS=[];
   tb.innerHTML=rows.slice(0,500).map(d=>{
-    const note=d.kind==='SIZE_DIFF'?`자동: ${d.autoSc} ${d.autoSn}`:(d.kind==='QTY_DIFF'?'수량 불일치':(d.kind==='MISSING'?'자동에 없음':(d.kind==='EXTRA'?'정답에 없음':'')));
+    const scopeNote=d.scope?(d.kind==='MISSING'?'정답 전용(raw 미포함)':'raw 전용(정답 없음)'):null;
+    const note=scopeNote||(d.kind==='SIZE_DIFF'?`자동: ${d.autoSc} ${d.autoSn}`:(d.kind==='QTY_DIFF'?'수량 불일치':(d.kind==='MISSING'?'자동에 없음':(d.kind==='EXTRA'?'정답에 없음':''))));
     const opt=String(d.opt||'').replace(/</g,'&lt;').slice(0,80);
-    const learnable=d.kind!=='MATCH'&&!seenKey.has(d.key);
+    // 학습 가능: 불일치 && 정답 SKU 존재(truthQty>0) && 키 중복 아님 (scope=정답전용도 학습 가능)
+    const learnable=d.kind!=='MATCH'&&d.truthQty>0&&!seenKey.has(d.key);
     if(learnable)seenKey.add(d.key);
-    const learnCell=learnable?`<button class="btn btn-y" style="padding:3px 8px;font-size:10px" onclick="learnOneFromDiff('${String(d.key).replace(/'/g,"\\'")}')">+학습</button>`:'';
-    return `<tr><td><span class="kbadge kb-${d.kind}">${d.kind}</span></td><td>${d.mg||d.key}</td><td>${d.no||''}</td><td title="${(d.pn||'').replace(/"/g,'&quot;')}">${(d.pn||'').slice(0,30)}</td><td title="${opt.replace(/"/g,'&quot;')}">${opt}</td><td>${d.sc}</td><td title="${(d.sn||'').replace(/"/g,'&quot;')}">${(d.sn||'').slice(0,28)}</td><td style="text-align:right">${d.autoQty}</td><td style="text-align:right">${d.truthQty}</td><td>${note}</td><td>${learnCell}</td></tr>`;
+    let learnCell='';
+    if(learnable){ const ki=window.DIFF_RENDER_KEYS.push(d.key)-1; learnCell=`<button class="btn btn-y" style="padding:3px 8px;font-size:10px" onclick="learnOneFromDiff(window.DIFF_RENDER_KEYS[${ki}])">+학습</button>`; }
+    const rowStyle=d.scope?' style="opacity:.6"':'';
+    return `<tr${rowStyle}><td><span class="kbadge kb-${d.kind}">${d.kind}</span></td><td>${d.mg||''}</td><td>${d.no||''}</td><td title="${(d.pn||'').replace(/"/g,'&quot;')}">${(d.pn||'').slice(0,30)}</td><td title="${opt.replace(/"/g,'&quot;')}">${opt}</td><td>${d.sc}</td><td title="${(d.sn||'').replace(/"/g,'&quot;')}">${(d.sn||'').slice(0,28)}</td><td style="text-align:right">${d.autoQty}</td><td style="text-align:right">${d.truthQty}</td><td>${note}</td><td>${learnCell}</td></tr>`;
   }).join('');
   if(rows.length>500){tb.innerHTML+=`<tr><td colspan="11" class="empty">… 외 ${rows.length-500}건 (Excel 다운로드로 전체 확인)</td></tr>`}
 }
