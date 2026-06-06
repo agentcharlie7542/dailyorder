@@ -19,7 +19,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t);min-height:100v
 .box-b{padding:18px}
 .note{border-left:4px solid var(--y);padding:14px 18px;background:#fffbeb;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:12px;color:#78350f}
 .note b{color:#b45309}
-.ugrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ugrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media (max-width:960px){.ugrid{grid-template-columns:1fr}}
 .ucard{border:2px dashed var(--bdr);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:.2s;background:#fafafa}
 .ucard:hover{border-color:var(--a);background:#eef2ff}
 .ucard.ok{border-color:var(--g);border-style:solid;background:#ecfdf5}
@@ -45,6 +46,38 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t);min-height:100v
 .btn-r{background:var(--r);color:#fff}.btn-r:hover{background:#b91c1c}
 .btn-y{background:var(--y);color:#fff}.btn-y:hover{background:#b45309}
 .sg{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.sg6{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+@media (max-width:960px){.sg6{grid-template-columns:repeat(3,1fr)}}
+.diff-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.diff-tab{padding:5px 12px;font-size:11px;border:1px solid var(--bdr);border-radius:14px;background:#fff;cursor:pointer;color:var(--m);font-weight:600;transition:.15s}
+.diff-tab:hover{border-color:#94a3b8;color:var(--t)}
+.diff-tab.on{background:var(--t);color:#fff;border-color:var(--t)}
+.stepper{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:12px 16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.03);overflow-x:auto}
+.step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--m);font-weight:600;white-space:nowrap;flex-shrink:0}
+.step .dot{width:24px;height:24px;border-radius:50%;background:#e2e8f0;color:var(--m);display:inline-flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;transition:.2s}
+.step.done .dot{background:var(--g);color:#fff}
+.step.active .dot{background:var(--a);color:#fff;box-shadow:0 0 0 3px rgba(79,70,229,.18)}
+.step.done,.step.active{color:var(--t)}
+.step-arr{color:#cbd5e1;font-family:var(--mono);font-size:14px;flex-shrink:0}
+.box.victory{border-color:var(--g);box-shadow:0 0 0 3px rgba(5,150,105,.12)}
+.box.victory .box-h{background:linear-gradient(135deg,#ecfdf5,#d1fae5);color:#065f46}
+.acc-spark{display:inline-flex;gap:3px;align-items:flex-end;height:18px;margin-left:6px;vertical-align:middle}
+.acc-spark span{width:6px;background:var(--g);border-radius:1px;opacity:.85}
+.acc-meta{font-family:var(--mono);font-size:10px;color:var(--m)}
+.ollama-grid{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:10px;align-items:end}
+@media (max-width:760px){.ollama-grid{grid-template-columns:1fr}}
+.toggle{position:relative;display:inline-block;width:38px;height:20px}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .sl{position:absolute;inset:0;background:#cbd5e1;border-radius:20px;cursor:pointer;transition:.2s}
+.toggle .sl::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked + .sl{background:var(--g)}
+.toggle input:checked + .sl::before{transform:translateX(18px)}
+.kbadge{display:inline-block;padding:2px 7px;font-size:9px;font-weight:700;border-radius:3px;font-family:var(--mono);letter-spacing:.3px}
+.kb-MATCH{background:#d1fae5;color:#065f46}
+.kb-QTY_DIFF{background:#fef3c7;color:#92400e}
+.kb-SIZE_DIFF{background:#ede9fe;color:#5b21b6}
+.kb-MISSING{background:#fee2e2;color:#991b1b}
+.kb-EXTRA{background:#dbeafe;color:#1e40af}
 .sc{background:#fff;border:1px solid var(--bdr);border-radius:7px;padding:12px 14px}
 .sc .l{font-size:10px;color:var(--m);margin-bottom:3px;font-weight:500}
 .sc .v{font-size:20px;font-weight:700;font-family:var(--mono);color:var(--t)}
@@ -109,6 +142,20 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 <div class="c">
 
+<div class="stepper" id="stepper">
+  <div class="step" id="stp1"><span class="dot">1</span>주문건 업로드</div>
+  <span class="step-arr">▶</span>
+  <div class="step" id="stp2"><span class="dot">2</span>1차 매핑</div>
+  <span class="step-arr">▶</span>
+  <div class="step" id="stp3"><span class="dot">3</span>정답 대조</div>
+  <span class="step-arr">▶</span>
+  <div class="step" id="stp4"><span class="dot">4</span>학습 · 재매핑</div>
+  <span class="step-arr">▶</span>
+  <div class="step" id="stp5"><span class="dot">✓</span><span id="stp5_lbl">100% 도달</span></div>
+  <span style="flex:1"></span>
+  <span class="acc-meta" id="stepIter">회차 0</span>
+</div>
+
 <div class="note">
   <b>3단계 매칭 파이프라인:</b>
   ① <b>사용자 학습규칙</b>(localStorage 저장 · 영구) →
@@ -130,10 +177,20 @@ tr.group-edited:hover td{background:#fef9c3}
   ondragover="ocDrag(event)" ondragleave="ocDragLeave(event)" ondrop="ocDrop(event)">
   <input type="file" id="of" accept=".xlsx,.xls" multiple onchange="loadO(this)">
   <div class="ic">🛒</div>
-  <div class="lb">주문건 파일</div>
+  <div class="lb">주문건 파일 (Raw)</div>
   <div class="sb" id="oc_hint">클릭 또는 파일을 드래그</div>
   <div class="st" id="os"></div>
   <div class="file-tags" id="oc_files"></div>
+</div>
+<div class="ucard" id="rsc"
+  onclick="document.getElementById('rsf').click()"
+  ondragover="rscDrag(event)" ondragleave="rscDragLeave(event)" ondrop="rscDrop(event)">
+  <input type="file" id="rsf" accept=".xlsx,.xls" multiple onchange="loadR(this)">
+  <div class="ic">🎯</div>
+  <div class="lb">정답 파일 (선택)</div>
+  <div class="sb" id="rsc_hint">담당자 분리 결과 · 대조용</div>
+  <div class="st" id="rss"></div>
+  <div class="file-tags" id="rsc_files"></div>
 </div>
 </div>
 <div class="acts">
@@ -152,7 +209,11 @@ tr.group-edited:hover td{background:#fef9c3}
 <div class="sc"><div class="l">출력 행 수</div><div class="v y" id="s4">0</div></div>
 </div>
 <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
-<div class="acts"><button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button></div>
+<div class="acts">
+  <button class="btn btn-p" id="cmpBtn" onclick="compareNow()" disabled>🔬 정답 대조 실행</button>
+  <button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button>
+  <span id="cmpHint" style="font-size:11px;color:var(--m);margin-left:6px"></span>
+</div>
 </div></div>
 
 <div class="box hidden" id="ps"><div class="box-h"><span>🔍 결과 미리보기</span><div style="display:flex;gap:6px;align-items:center">
@@ -164,6 +225,31 @@ tr.group-edited:hover td{background:#fef9c3}
 </div></div><div class="box-b">
 <div id="mv"><div class="tw"><table><thead><tr><th style="width:30px"></th><th>판매처명</th><th>판매처 상품코드</th><th>판매처 상품명</th><th>판매처 옵션</th><th>상품코드</th><th>상품명</th><th>수량</th><th>관리번호</th><th>매칭방식</th><th style="width:50px"></th></tr></thead><tbody id="mt"></tbody></table></div></div>
 <div id="uv" class="hidden"><div class="tw"><table><thead><tr><th>관리번호</th><th>판매처</th><th>상품코드</th><th>상품명</th><th>옵션</th><th>수량</th><th>사유</th><th>+ 학습</th></tr></thead><tbody id="ut"></tbody></table></div></div>
+</div></div>
+
+<div class="box hidden" id="ds"><div class="box-h"><span>🔬 정답 대조 리포트</span><span id="accHist" class="acc-meta">자동 결과 ↔ 담당자 정답</span></div><div class="box-b">
+<div class="sg6">
+<div class="sc"><div class="l">정확도</div><div class="v g" id="d0">0%</div></div>
+<div class="sc"><div class="l">MATCH</div><div class="v g" id="d1">0</div></div>
+<div class="sc"><div class="l">QTY 차이</div><div class="v y" id="d2">0</div></div>
+<div class="sc"><div class="l">SIZE 차이</div><div class="v p" id="d3">0</div></div>
+<div class="sc"><div class="l">MISSING</div><div class="v r" id="d4">0</div></div>
+<div class="sc"><div class="l">EXTRA</div><div class="v b" id="d5">0</div></div>
+</div>
+<div class="diff-tabs">
+<button class="diff-tab on" data-f="DIFF" onclick="setDiffFilter(this,'DIFF')">불일치만</button>
+<button class="diff-tab" data-f="ALL" onclick="setDiffFilter(this,'ALL')">전체</button>
+<button class="diff-tab" data-f="QTY_DIFF" onclick="setDiffFilter(this,'QTY_DIFF')">QTY</button>
+<button class="diff-tab" data-f="SIZE_DIFF" onclick="setDiffFilter(this,'SIZE_DIFF')">SIZE</button>
+<button class="diff-tab" data-f="MISSING" onclick="setDiffFilter(this,'MISSING')">MISSING</button>
+<button class="diff-tab" data-f="EXTRA" onclick="setDiffFilter(this,'EXTRA')">EXTRA</button>
+<span style="flex:1"></span>
+<button class="btn btn-y" style="padding:5px 12px;font-size:10px" onclick="learnAllFromDiff()">🧠 학습만</button>
+<button class="btn btn-p" style="padding:5px 12px;font-size:10px" onclick="learnAndRerun()">📚 학습 후 재매핑 ▶</button>
+<button class="btn btn-p" style="padding:5px 12px;font-size:10px;background:linear-gradient(135deg,#059669,#10b981)" onclick="autoLoopUntil100()">🎯 100% 자동 루프</button>
+<button class="btn btn-g" style="padding:5px 12px;font-size:10px" onclick="dlDiff()">⬇ Diff Excel</button>
+</div>
+<div class="tw"><table><thead><tr><th style="width:80px">유형</th><th>관리번호</th><th>주문번호</th><th>판매처 상품명</th><th>판매처 옵션</th><th>상품코드</th><th>상품명</th><th style="width:60px">자동</th><th style="width:60px">정답</th><th>비고</th><th style="width:60px">학습</th></tr></thead><tbody id="dt"></tbody></table></div>
 </div></div>
 
 <div class="box"><div class="box-h"><span>🧩 사용자 학습규칙 추가 / 관리</span><span style="font-size:11px;color:var(--m);font-weight:400">localStorage · 다음 매핑부터 자동 적용</span></div><div class="box-b">
@@ -208,11 +294,30 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 </div></div>
 
+<div class="box"><div class="box-h"><span>🦙 Ollama 보조 (선택)</span><span style="font-size:11px;color:var(--m);font-weight:400">미매핑 SKU 추천 · 로컬 LLM</span></div><div class="box-b">
+<div class="note" style="margin-bottom:14px;font-size:11px">
+  <b>사용 조건:</b> 로컬에 Ollama가 실행 중이어야 하며, <b>CORS 허용</b>을 위해 시작 시 환경변수 <code>OLLAMA_ORIGINS=*</code> 설정 필요.
+  <br>예: <code>OLLAMA_ORIGINS=* ollama serve</code> · 기본 URL <code>http://localhost:11434</code>
+  <br><b>역할:</b> 미매핑 행의 SKU 후보를 LLM이 추천하고, 운영자가 검수 후 학습규칙 폼에 자동 채워 줍니다. 수량은 보수적으로 사람이 최종 확인.
+</div>
+<div class="ollama-grid">
+<div class="fld"><label>활성화</label><label class="toggle" style="margin-top:6px"><input type="checkbox" id="olm_on" onchange="saveOllamaCfg()"><span class="sl"></span></label></div>
+<div class="fld"><label>Ollama URL</label><input id="olm_url" type="text" placeholder="http://localhost:11434" value="http://localhost:11434" onchange="saveOllamaCfg()"></div>
+<div class="fld"><label>모델</label><input id="olm_model" type="text" placeholder="qwen2.5:7b" value="qwen2.5:7b" onchange="saveOllamaCfg()"></div>
+<div class="fld"><label>&nbsp;</label><button class="btn btn-o" onclick="ollamaPing()">연결 테스트</button></div>
+</div>
+<div id="olm_msg" style="margin-top:10px;font-size:11px;color:var(--m)"></div>
+</div></div>
+
 </div>
 
 <script>
 let OD=[],OD_FILES=[],MR=[],UR=[];
+let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
+const ACC_KEY='mealit_acc_history_v1';
+const OLM_KEY='mealit_ollama_cfg_v1';
+const OLM_MAX=50;
 
 // ── SKU 마스터
 const SKU = {
@@ -281,7 +386,76 @@ function ocDrop(e){
   document.getElementById('oc').classList.remove('drag-over');
   Array.from(e.dataTransfer.files).filter(f=>/\.xlsx?$/i.test(f.name)).forEach(f=>loadOneFile(f));
 }
-function chk(){document.getElementById('mb').disabled=!(OD.length>0);if(OD.length>0)log('준비 완료. [매핑 실행] 클릭','ok')}
+function chk(){document.getElementById('mb').disabled=!(OD.length>0);if(OD.length>0)log(RD.length?'준비 완료. 매핑 후 [정답 대조 실행] 가능':'준비 완료. [매핑 실행] 클릭','ok');updateStepper()}
+
+// ── 정답(Result) 파일 적재 + 헤더 자동 인식
+function normHdr(s){return String(s||'').toLowerCase().replace(/\s+/g,'').replace(/[_\-./()]/g,'')}
+function pickHdr(keys,cands){
+  for(const c of cands){const nc=normHdr(c);const hit=keys.find(k=>normHdr(k)===nc);if(hit)return hit}
+  for(const c of cands){const nc=normHdr(c);const hit=keys.find(k=>normHdr(k).includes(nc));if(hit)return hit}
+  return null;
+}
+function detectResultHeaders(rows){
+  if(!rows.length)return null;
+  const keys=Object.keys(rows[0]);
+  return {
+    orderNo: pickHdr(keys,['주문번호','주문ID','orderno','ordernumber','ordno']),
+    itemNo : pickHdr(keys,['품목별주문번호','품목별주문ID','품목주문번호','itemorderno','itemno','품목번호']),
+    skuCode: pickHdr(keys,['상품코드','SKU코드','SKU','code','관리번호','itemcode','품목코드']),
+    skuName: pickHdr(keys,['상품명','SKU명','품명','productname','itemname']),
+    qty    : pickHdr(keys,['수량','출고수량','qty','quantity','출하수량','선택수량']),
+  };
+}
+function loadR(inp){Array.from(inp.files).forEach(f=>loadOneResultFile(f));inp.value=''}
+function loadOneResultFile(f){
+  if(RD_FILES.find(x=>x.name===f.name)){log(`⚠ 이미 로드됨(정답): ${f.name}`,'w');return}
+  readXL(f,wb=>{
+    const sn=wb.SheetNames.find(s=>/result|정답|매핑|sku|출고/i.test(s))||wb.SheetNames[0];
+    let rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
+    if(rows.length>0&&Object.keys(rows[0]).every(k=>!isNaN(k))){
+      const arr=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+      const hdrs=arr[0].map(h=>String(h).trim());
+      rows=arr.slice(1).map(r=>Object.fromEntries(hdrs.map((h,i)=>[h,r[i]??''])));
+      log(`HTML XLS 감지(정답) → 헤더 재매핑`,'w');
+    }
+    if(!rows.length){log(`✕ ${f.name}: 빈 시트`,'e');return}
+    const hdr=detectResultHeaders(rows);
+    const missing=[];
+    if(!hdr.orderNo)missing.push('주문번호');
+    if(!hdr.skuCode)missing.push('상품코드');
+    if(!hdr.qty)missing.push('수량');
+    if(missing.length){
+      log(`✕ ${f.name}: 필수 컬럼 누락 [${missing.join(', ')}] · 실제 헤더=${Object.keys(rows[0]).join(', ')}`,'e');
+      return;
+    }
+    RD_FILES.push({name:f.name,rows,hdr});
+    RD=RD_FILES.flatMap(x=>x.rows.map(r=>({_src:x.name,_hdr:x.hdr,...r})));
+    updateRsCard();
+    log(`+ ${f.name}: ${rows.length}행 정답 (orderNo=${hdr.orderNo}, itemNo=${hdr.itemNo||'∅'}, skuCode=${hdr.skuCode}, qty=${hdr.qty}) → 총 ${RD.length}행`,'ok');
+    chk();
+  });
+}
+function removeResultFile(name){
+  RD_FILES=RD_FILES.filter(x=>x.name!==name);
+  RD=RD_FILES.flatMap(x=>x.rows.map(r=>({_src:x.name,_hdr:x.hdr,...r})));
+  updateRsCard();
+  log('정답 파일 제거','w');
+  chk();
+}
+function updateRsCard(){
+  const ok=RD_FILES.length>0;
+  document.getElementById('rsc').classList.toggle('ok',ok);
+  document.getElementById('rss').textContent=ok?`✓ ${RD_FILES.length}개 파일 · ${RD.length}행`:'';
+  document.getElementById('rsc_hint').textContent=ok?'추가 파일 클릭 또는 드래그':'담당자 분리 결과 · 대조용';
+  document.getElementById('rsc_files').innerHTML=RD_FILES.map(f=>`<div class="file-tag"><span class="fn" title="${f.name}">${f.name.replace(/\.xlsx?$/i,'')} (${f.rows.length})</span><span class="rm" onclick="event.stopPropagation();removeResultFile('${f.name.replace(/'/g,"\\'")}')">✕</span></div>`).join('');
+}
+function rscDrag(e){e.preventDefault();document.getElementById('rsc').classList.add('drag-over')}
+function rscDragLeave(e){document.getElementById('rsc').classList.remove('drag-over')}
+function rscDrop(e){
+  e.preventDefault();
+  document.getElementById('rsc').classList.remove('drag-over');
+  Array.from(e.dataTransfer.files).filter(f=>/\.xlsx?$/i.test(f.name)).forEach(f=>loadOneResultFile(f));
+}
 
 function padCode(c){const s=String(c||'').replace(/^0+/,'');return s?s.padStart(5,'0'):''}
 
@@ -774,8 +948,9 @@ function applyCustomRules(productName,optionRaw,orderQty){
 }
 
 function run(){
-  log('매핑 시작 (3단계)...','i');
-  MR=[];UR=[];
+  if(!ITER)ITER=1;
+  log(`매핑 시작 (회차 ${ITER})...`,'i');
+  MR=[];UR=[];DIFF=[];
   log(`내장규칙: ${BUILTIN_RULES.length}개 / 사용자규칙: ${loadRules().length}개 / 파싱엔진 v3`,'i');
 
   let okCount=0,customCount=0;
@@ -787,12 +962,14 @@ function run(){
     const oQty=Number(o['수량'])||1;
     const mgmt=String(o['관리번호']||'').trim();
     const pName=String(o['상품명']||'').trim();
+    const orderNoRaw=String(o['주문번호']||o['주문 번호']||'').trim();
+    const orderKey=mgmt||orderNoRaw||('row_'+idx);
 
     // STEP 1: 사용자 학습규칙
     const custom=applyCustomRules(pName,optionRaw,oQty);
     if(custom.length>0){
       custom.forEach((p,i)=>{
-        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q,mg:i===0?mgmt:'',mt:'학습규칙',_m:i===0});
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q,mg:i===0?mgmt:'',mt:'학습규칙',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
       });
       okCount++;customCount++;
       log(`✓ #${mgmt} 학습규칙 (${custom.length}개)`,'c');
@@ -806,7 +983,7 @@ function run(){
       // 단일 SKU 결과 = 진짜 주문 수량이므로 oQty 곱셈 적용
       const qMult=parsed.length>1?1:oQty;
       parsed.forEach((p,i)=>{
-        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q*qMult,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0});
+        MR.push({v:i===0?vendor:'',pc:i===0?pcode:'',pn:i===0?pName:'',opt:i===0?optionRaw:'',sc:p.c,sn:p.n,q:p.q*qMult,mg:i===0?mgmt:'',mt:'옵션파싱',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
       });
       okCount++;
       log(`✓ #${mgmt} 옵션파싱 (${parsed.length}개 상품)`,'ok');
@@ -814,7 +991,7 @@ function run(){
     }
 
     // STEP 4: 실패
-    UR.push({mg:mgmt,v:vendor,pc:pcode,pn:pName,opt:optionRaw,q:oQty,why:'매칭 규칙 없음'});
+    UR.push({mg:mgmt,v:vendor,pc:pcode,pn:pName,opt:optionRaw,q:oQty,why:'매칭 규칙 없음',_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
     log(`✗ #${mgmt}: ${vendor}/${pcode} — 매칭 실패`,'e');
   });
 
@@ -828,6 +1005,423 @@ function run(){
   document.getElementById('ss').classList.remove('hidden');
   document.getElementById('ps').classList.remove('hidden');
   renderM();renderU();
+  updateStepper();
+}
+
+// ── 정답 대조 (Step B)
+// SKU 코드 → {flavor, size} 역 인덱스 (사이즈 차이 감지용)
+function buildSkuReverseIndex(){
+  const rev={};
+  Object.entries(SKU).forEach(([flavor,arr])=>{
+    arr.forEach(s=>{ if(!rev[s.c]) rev[s.c]={flavor,size:s.t} });
+  });
+  return rev;
+}
+function runDiff(){
+  const SKU_REV=buildSkuReverseIndex();
+  DIFF=[];
+
+  // 1) 자동 결과 집계: (orderKey, skuCode) → qty
+  // 같은 키 안의 동일 SKU 행은 수량 합산 (중복 행 대비)
+  const autoMap=new Map();
+  const autoCtx=new Map(); // orderKey → {vendor,pcode,pName,opt,mgmt}
+  MR.forEach(r=>{
+    const k=r._orderKey;
+    if(!autoCtx.has(k)){
+      const head=MR.find(x=>x._orderKey===k&&x._m);
+      autoCtx.set(k,head?{v:head.v,pc:head.pc,pn:head.pn,opt:head.opt,mg:head.mg||k,no:head._orderNo}:{v:'',pc:'',pn:'',opt:'',mg:k,no:''});
+    }
+    const mk=k+'||'+padCode(r.sc);
+    autoMap.set(mk,(autoMap.get(mk)||0)+(Number(r.q)||0));
+  });
+
+  // 2) 정답 결과 집계: (orderKey, skuCode) → qty
+  // 정답 키 우선순위: 품목별주문번호 > 주문번호
+  const truthMap=new Map();
+  const truthCtx=new Map();
+  RD.forEach(r=>{
+    const h=r._hdr;
+    const itemNo=h.itemNo?String(r[h.itemNo]||'').trim():'';
+    const orderNo=h.orderNo?String(r[h.orderNo]||'').trim():'';
+    const k=itemNo||orderNo;
+    if(!k)return;
+    const sc=padCode(r[h.skuCode]);
+    if(!sc)return;
+    const qty=Number(r[h.qty])||0;
+    if(!truthCtx.has(k)) truthCtx.set(k,{no:orderNo,item:itemNo});
+    const mk=k+'||'+sc;
+    truthMap.set(mk,(truthMap.get(mk)||0)+qty);
+  });
+
+  // 3) 매칭 모드 결정: 자동의 _orderKey 와 정답의 키가 직접 겹치는지 확인
+  // 안 겹치면 주문번호(orderNo) 폴백 시도
+  const autoKeys=new Set([...autoMap.keys()].map(k=>k.split('||')[0]));
+  const truthKeys=new Set([...truthMap.keys()].map(k=>k.split('||')[0]));
+  const direct=[...autoKeys].filter(k=>truthKeys.has(k)).length;
+  let useOrderNo=false;
+  if(direct===0 && autoCtx.size){
+    // 폴백: 자동의 _orderNo 와 정답 키를 매칭 시도
+    const anyNoMatch=[...autoCtx.values()].some(c=>c.no&&truthKeys.has(c.no));
+    if(anyNoMatch){useOrderNo=true;log('대조 키 폴백: 자동 주문번호 ↔ 정답 키','w')}
+  }
+
+  // 4) 자동의 키를 정답 키 공간으로 변환
+  const remapAuto=new Map(); // newKey||sc → qty
+  const remapCtx=new Map();  // newKey → ctx
+  autoMap.forEach((q,mk)=>{
+    const [ok,sc]=mk.split('||');
+    const ctx=autoCtx.get(ok);
+    const nk=useOrderNo?(ctx&&ctx.no?ctx.no:ok):ok;
+    const nmk=nk+'||'+sc;
+    remapAuto.set(nmk,(remapAuto.get(nmk)||0)+q);
+    if(!remapCtx.has(nk)&&ctx)remapCtx.set(nk,ctx);
+  });
+
+  // 5) Diff 5종
+  const seenAuto=new Set();
+  truthMap.forEach((tq,mk)=>{
+    const [k,sc]=mk.split('||');
+    const aq=remapAuto.get(mk);
+    const ctx=remapCtx.get(k)||{v:'',pc:'',pn:'',opt:'',mg:k,no:''};
+    if(aq!==undefined){
+      seenAuto.add(mk);
+      if(aq===tq){
+        DIFF.push({kind:'MATCH',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:aq,truthQty:tq,...ctx});
+      }else{
+        DIFF.push({kind:'QTY_DIFF',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:aq,truthQty:tq,...ctx});
+      }
+    }else{
+      // 정답에는 있으나 자동에는 없음 → MISSING
+      // 단, 같은 (key, flavor) 다른 사이즈가 자동에 있으면 SIZE_DIFF
+      const truthInfo=SKU_REV[sc];
+      let sizeDiffMatch=null;
+      if(truthInfo){
+        for(const [amk,aq2] of remapAuto){
+          if(seenAuto.has(amk))continue;
+          const [ak,asc]=amk.split('||');
+          if(ak!==k)continue;
+          const ai=SKU_REV[asc];
+          if(ai&&ai.flavor===truthInfo.flavor&&ai.size!==truthInfo.size){
+            sizeDiffMatch={amk,asc,aq:aq2};
+            break;
+          }
+        }
+      }
+      if(sizeDiffMatch){
+        seenAuto.add(sizeDiffMatch.amk);
+        DIFF.push({kind:'SIZE_DIFF',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoSc:sizeDiffMatch.asc,autoSn:SKU_CATALOG_ALL[sizeDiffMatch.asc]||'',autoQty:sizeDiffMatch.aq,truthQty:tq,...ctx});
+      }else{
+        DIFF.push({kind:'MISSING',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:0,truthQty:tq,...ctx});
+      }
+    }
+  });
+  // 자동에만 있는 SKU → EXTRA
+  remapAuto.forEach((aq,mk)=>{
+    if(seenAuto.has(mk))return;
+    const [k,sc]=mk.split('||');
+    const ctx=remapCtx.get(k)||{v:'',pc:'',pn:'',opt:'',mg:k,no:''};
+    DIFF.push({kind:'EXTRA',key:k,sc,sn:SKU_CATALOG_ALL[sc]||'',autoQty:aq,truthQty:0,...ctx});
+  });
+
+  // 6) 요약 로그
+  const cnt={MATCH:0,QTY_DIFF:0,SIZE_DIFF:0,MISSING:0,EXTRA:0};
+  DIFF.forEach(d=>{cnt[d.kind]++});
+  const total=DIFF.length||1;
+  const acc=(cnt.MATCH/total*100).toFixed(1);
+  log(`정답 대조: 자동 ${remapAuto.size}행 vs 정답 ${truthMap.size}행 · 키매칭 ${useOrderNo?'주문번호':'관리번호/품목별'}`,'i');
+  log(`Diff: MATCH ${cnt.MATCH} / QTY_DIFF ${cnt.QTY_DIFF} / SIZE_DIFF ${cnt.SIZE_DIFF} / MISSING ${cnt.MISSING} / EXTRA ${cnt.EXTRA} · 정확도 ${acc}%`, cnt.MATCH===DIFF.length?'ok':'w');
+
+  document.getElementById('d0').textContent=acc+'%';
+  document.getElementById('d1').textContent=cnt.MATCH;
+  document.getElementById('d2').textContent=cnt.QTY_DIFF;
+  document.getElementById('d3').textContent=cnt.SIZE_DIFF;
+  document.getElementById('d4').textContent=cnt.MISSING;
+  document.getElementById('d5').textContent=cnt.EXTRA;
+  document.getElementById('ds').classList.remove('hidden');
+  renderDiff();
+  recordAcc(cnt.MATCH,DIFF.length);
+  return DIFF;
+}
+
+let DIFF_FILTER='DIFF';
+function setDiffFilter(btn,f){
+  DIFF_FILTER=f;
+  document.querySelectorAll('.diff-tab').forEach(b=>b.classList.toggle('on',b===btn));
+  renderDiff();
+}
+function renderDiff(){
+  const tb=document.getElementById('dt');
+  if(!DIFF.length){tb.innerHTML='<tr><td colspan="11" class="empty">대조 결과 없음</td></tr>';return}
+  const rows=DIFF.filter(d=>{
+    if(DIFF_FILTER==='ALL')return true;
+    if(DIFF_FILTER==='DIFF')return d.kind!=='MATCH';
+    return d.kind===DIFF_FILTER;
+  });
+  if(!rows.length){tb.innerHTML='<tr><td colspan="11" class="empty">해당 필터 결과 없음</td></tr>';return}
+  // 그룹 단위로 학습 버튼을 첫 행에만 노출
+  const seenKey=new Set();
+  tb.innerHTML=rows.slice(0,500).map(d=>{
+    const note=d.kind==='SIZE_DIFF'?`자동: ${d.autoSc} ${d.autoSn}`:(d.kind==='QTY_DIFF'?'수량 불일치':(d.kind==='MISSING'?'자동에 없음':(d.kind==='EXTRA'?'정답에 없음':'')));
+    const opt=String(d.opt||'').replace(/</g,'&lt;').slice(0,80);
+    const learnable=d.kind!=='MATCH'&&!seenKey.has(d.key);
+    if(learnable)seenKey.add(d.key);
+    const learnCell=learnable?`<button class="btn btn-y" style="padding:3px 8px;font-size:10px" onclick="learnOneFromDiff('${String(d.key).replace(/'/g,"\\'")}')">+학습</button>`:'';
+    return `<tr><td><span class="kbadge kb-${d.kind}">${d.kind}</span></td><td>${d.mg||d.key}</td><td>${d.no||''}</td><td title="${(d.pn||'').replace(/"/g,'&quot;')}">${(d.pn||'').slice(0,30)}</td><td title="${opt.replace(/"/g,'&quot;')}">${opt}</td><td>${d.sc}</td><td title="${(d.sn||'').replace(/"/g,'&quot;')}">${(d.sn||'').slice(0,28)}</td><td style="text-align:right">${d.autoQty}</td><td style="text-align:right">${d.truthQty}</td><td>${note}</td><td>${learnCell}</td></tr>`;
+  }).join('');
+  if(rows.length>500){tb.innerHTML+=`<tr><td colspan="11" class="empty">… 외 ${rows.length-500}건 (Excel 다운로드로 전체 확인)</td></tr>`}
+}
+
+// ── Step D: Diff → 학습규칙 자동 등록
+function buildLearnRuleForKey(key){
+  // 해당 키의 자동 컨텍스트 (옵션/상품명)
+  const head=DIFF.find(d=>d.key===key&&(d.opt||d.pn));
+  if(!head){return null}
+  const pattern=String(head.opt||head.pn||'').trim();
+  if(!pattern)return null;
+  // 정답 SKU 리스트 = 해당 키에서 truthQty>0 (MATCH/QTY_DIFF/SIZE_DIFF/MISSING 의 정답 기준)
+  // EXTRA(정답에 없음)는 결과에서 제외
+  const truth=DIFF.filter(d=>d.key===key&&d.kind!=='EXTRA'&&d.truthQty>0);
+  if(!truth.length)return null;
+  // SIZE_DIFF는 정답 SKU(sc)를 사용 (자동의 autoSc 가 아님)
+  const results=truth.map(d=>({code:parseInt(d.sc,10),qty:d.truthQty}));
+  // 카탈로그 검증
+  const invalid=results.find(r=>!SKU_CATALOG_ALL[padCode(r.code)]);
+  if(invalid)return null;
+  const cnt={MATCH:0,QTY_DIFF:0,SIZE_DIFF:0,MISSING:0,EXTRA:0};
+  DIFF.filter(d=>d.key===key).forEach(d=>{cnt[d.kind]++});
+  const note=`자동학습 ${new Date().toISOString().slice(0,10)} · M:${cnt.MATCH}/Q:${cnt.QTY_DIFF}/S:${cnt.SIZE_DIFF}/Mi:${cnt.MISSING}/E:${cnt.EXTRA}`;
+  return {pattern, target:'all', results, note, createdAt:new Date().toISOString(), _origin:'diff', _key:String(key)};
+}
+function learnOneFromDiff(key){
+  const rule=buildLearnRuleForKey(key);
+  if(!rule){log(`학습 실패: ${key} (정답 SKU 없음/패턴 부재)`,'e');return}
+  const rs=loadRules();
+  const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
+  if(dupIdx>=0){
+    // 같은 패턴이 이미 있으면 결과만 교체 (정답이 곧 최신)
+    rs[dupIdx]={...rs[dupIdx],results:rule.results,note:rule.note,updatedAt:new Date().toISOString()};
+    saveRules(rs);renderRules();
+    log(`↻ 갱신: ${rule.pattern.slice(0,40)}… (${rule.results.length}개)`,'c');
+    return;
+  }
+  rs.push(rule);
+  saveRules(rs);renderRules();
+  log(`+ 학습규칙: ${rule.pattern.slice(0,40)}… → ${rule.results.length}개 SKU`,'c');
+}
+function learnAllFromDiff(silent=false){
+  const keys=new Set();
+  DIFF.forEach(d=>{if(d.kind!=='MATCH')keys.add(d.key)});
+  if(!keys.size){if(!silent)log('불일치 케이스가 없습니다','i');return{added:0,updated:0,fail:0,total:0}}
+  if(!silent && !confirm(`불일치 ${keys.size}개 케이스를 학습규칙으로 일괄 등록할까요?\n(같은 패턴은 정답 기준으로 갱신됩니다)`))return{added:0,updated:0,fail:0,total:0};
+  const rs=loadRules();
+  let added=0,updated=0,fail=0;
+  keys.forEach(k=>{
+    const rule=buildLearnRuleForKey(k);
+    if(!rule){fail++;return}
+    const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
+    if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results:rule.results,note:rule.note,updatedAt:new Date().toISOString()};updated++}
+    else{rs.push(rule);added++}
+  });
+  saveRules(rs);renderRules();
+  log(`자동학습: 신규 ${added} · 갱신 ${updated} · 실패 ${fail}`,'ok');
+  return {added,updated,fail,total:keys.size};
+}
+
+// ── 단계별 워크플로우 (Step 1~5)
+let ITER=0;
+function updateStepper(){
+  const sLoaded=OD.length>0;
+  const sMapped=MR.length>0;
+  const sDiffed=DIFF.length>0;
+  const cnt=DIFF.length?DIFF.filter(d=>d.kind==='MATCH').length:0;
+  const acc=DIFF.length?(cnt/DIFF.length*100):0;
+  const s100=DIFF.length>0&&acc>=100;
+  setStep('stp1',sLoaded,!sMapped&&sLoaded);
+  setStep('stp2',sMapped,sLoaded&&!sMapped);
+  setStep('stp3',sDiffed,sMapped&&!sDiffed&&RD.length>0);
+  setStep('stp4',sDiffed&&!s100,sDiffed&&!s100);
+  setStep('stp5',s100,false);
+  document.getElementById('stepIter').textContent=`회차 ${ITER}${DIFF.length?` · ${acc.toFixed(1)}%`:''}`;
+  // 정답 대조 버튼 상태
+  const cmp=document.getElementById('cmpBtn');
+  if(cmp){
+    const ready=sMapped&&RD.length>0;
+    cmp.disabled=!ready;
+    document.getElementById('cmpHint').textContent=ready?'(정답 파일 감지)':(sMapped?'정답 파일을 업로드하면 활성':'');
+  }
+  // 100% 도달 시각화
+  const ds=document.getElementById('ds');
+  if(ds)ds.classList.toggle('victory',s100);
+}
+function setStep(id,done,active){
+  const el=document.getElementById(id);if(!el)return;
+  el.classList.toggle('done',done&&!active);
+  el.classList.toggle('active',active);
+}
+
+// 명시적 [정답 대조 실행]
+function compareNow(){
+  if(!MR.length){log('매핑 결과가 없습니다 · 먼저 [매핑 실행]','e');return}
+  if(!RD.length){log('정답 파일이 없습니다 · 먼저 정답 파일을 업로드','e');return}
+  runDiff();
+  updateStepper();
+}
+
+// 학습 → 재매핑 1회
+function learnAndRerun(){
+  if(!DIFF.length){log('대조 결과가 없습니다','e');return}
+  const r=learnAllFromDiff(true);
+  if(r.added+r.updated===0){log('학습할 케이스가 없습니다','w');return}
+  ITER++;
+  log(`▶ 학습 후 재매핑 (회차 ${ITER})`,'c');
+  run();
+  if(RD.length){runDiff()}
+  updateStepper();
+}
+
+// 100% 달성까지 자동 루프 (최대 N회, 수렴 시 중단)
+async function autoLoopUntil100(maxIter=6){
+  if(!MR.length){log('먼저 [매핑 실행]','e');return}
+  if(!RD.length){log('정답 파일이 필요합니다','e');return}
+  // 아직 대조를 안 했으면 1회 먼저 실행
+  if(!DIFF.length){runDiff();updateStepper();await sleep(120)}
+  let prev=-1;
+  for(let i=1;i<=maxIter;i++){
+    const cur=DIFF.filter(d=>d.kind==='MATCH').length/(DIFF.length||1)*100;
+    log(`[루프 ${i}/${maxIter}] 정확도 ${cur.toFixed(2)}%`,'i');
+    if(cur>=100){log(`🎉 100% 달성 (총 ${ITER}회차)`,'ok');break}
+    if(Math.abs(cur-prev)<0.01&&i>1){log(`수렴 (변화 없음) — 중단`,'w');break}
+    prev=cur;
+    const r=learnAllFromDiff(true);
+    if(r.added+r.updated===0){log('더 이상 학습할 케이스 없음 — 중단','w');break}
+    ITER++;
+    log(`▶ 재매핑 (회차 ${ITER})`,'c');
+    run();
+    runDiff();
+    updateStepper();
+    await sleep(150); // UI 갱신용
+  }
+  updateStepper();
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+// ── Step F-1: 정확도 이력
+function loadAccHistory(){try{return JSON.parse(localStorage.getItem(ACC_KEY)||'[]')}catch(e){return []}}
+function saveAccHistory(h){localStorage.setItem(ACC_KEY,JSON.stringify(h.slice(-OLM_MAX)))}
+function recordAcc(matchCnt,total){
+  if(!total)return;
+  const h=loadAccHistory();
+  h.push({at:new Date().toISOString(),acc:+(matchCnt/total*100).toFixed(2),match:matchCnt,total});
+  saveAccHistory(h);
+  renderAccHistory();
+}
+function renderAccHistory(){
+  const el=document.getElementById('accHist');if(!el)return;
+  const h=loadAccHistory();
+  if(!h.length){el.textContent='이력 없음';return}
+  const last=h.slice(-7);
+  const spark=last.map(x=>`<span title="${x.at.slice(0,10)} · ${x.acc}%" style="height:${Math.max(2,Math.round(x.acc/100*18))}px;background:${x.acc>=95?'var(--g)':x.acc>=80?'var(--y)':'var(--r)'}"></span>`).join('');
+  const cur=h[h.length-1];
+  el.innerHTML=`최근 ${h.length}회 · 현재 ${cur.acc}%<span class="acc-spark">${spark}</span>`;
+}
+
+// ── Step F-2: Ollama 보조 (선택)
+function loadOllamaCfg(){try{return JSON.parse(localStorage.getItem(OLM_KEY)||'{}')}catch(e){return{}}}
+function saveOllamaCfg(){
+  const cfg={
+    on:document.getElementById('olm_on').checked,
+    url:(document.getElementById('olm_url').value||'http://localhost:11434').replace(/\/$/,''),
+    model:document.getElementById('olm_model').value||'qwen2.5:7b',
+  };
+  localStorage.setItem(OLM_KEY,JSON.stringify(cfg));
+  renderU();
+  return cfg;
+}
+function ollamaIsOn(){return !!(loadOllamaCfg().on)}
+async function ollamaCall(prompt,{json=true}={}){
+  const cfg=loadOllamaCfg();
+  const url=(cfg.url||'http://localhost:11434').replace(/\/$/,'')+'/api/generate';
+  const body={model:cfg.model||'qwen2.5:7b',prompt,stream:false};
+  if(json)body.format='json';
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok)throw new Error(`HTTP ${res.status}`);
+  const data=await res.json();
+  return data.response||'';
+}
+async function ollamaPing(){
+  const msg=document.getElementById('olm_msg');
+  msg.textContent='연결 시도 중…';msg.style.color='var(--m)';
+  try{
+    const out=await ollamaCall('Return JSON {"ok":true}',{json:true});
+    msg.textContent=`✓ 응답 OK · ${out.slice(0,80)}`;msg.style.color='var(--g)';
+  }catch(e){
+    msg.innerHTML=`✕ 실패: ${e.message} · <b>OLLAMA_ORIGINS=*</b> 환경변수와 모델 설치를 확인하세요`;msg.style.color='var(--r)';
+  }
+}
+function skuCatalogSummary(){
+  // LLM 프롬프트용 SKU 카탈로그 요약 (코드: 이름)
+  return Object.entries(SKU_CATALOG_ALL).map(([c,n])=>`${c}: ${n}`).join('\n');
+}
+async function ollamaSuggestUR(idx){
+  if(!ollamaIsOn()){log('Ollama 활성화 후 사용하세요','w');return}
+  const r=UR[idx];if(!r)return;
+  log(`🦙 ${r.mg||idx}: SKU 추천 요청 중...`,'c');
+  const prompt=
+`너는 한국 식품몰 SKU 매핑 전문가다. 아래 주문 옵션을 보고 출고될 SKU 목록을 JSON으로만 답하라.
+반드시 SKU 카탈로그에서만 코드를 골라야 한다. 모르면 빈 배열로 답하라.
+
+[상품명] ${r.pn||''}
+[옵션] ${r.opt||''}
+[주문수량] ${r.q||1}
+
+[SKU 카탈로그 (코드: 이름)]
+${skuCatalogSummary()}
+
+[출력 형식]
+{"sku_list":[{"code":"00020","qty":1},{"code":"00012","qty":2}]}`;
+  try{
+    const out=await ollamaCall(prompt,{json:true});
+    const parsed=JSON.parse(out);
+    const list=Array.isArray(parsed.sku_list)?parsed.sku_list:[];
+    const valid=list.filter(x=>x&&SKU_CATALOG_ALL[padCode(x.code)]);
+    if(!valid.length){log(`🦙 ${r.mg||idx}: 추천 결과 없음/유효하지 않음`,'w');return}
+    // 학습규칙 입력 폼에 자동 채움 (운영자 검수 후 추가)
+    document.getElementById('cr_pattern').value=r.opt||r.pn||'';
+    document.getElementById('cr_target').value='all';
+    document.getElementById('cr_result').value=valid.map(x=>`${padCode(x.code)}:${x.qty||1}`).join(', ');
+    document.getElementById('cr_note').value=`🦙 Ollama 추천 (${loadOllamaCfg().model||''})`;
+    document.getElementById('cr_pattern').scrollIntoView({behavior:'smooth',block:'center'});
+    log(`🦙 ${r.mg||idx}: ${valid.length}개 SKU 추천 → 학습규칙 폼에 채움. 검수 후 [학습규칙 추가] 클릭`,'ok');
+  }catch(e){
+    log(`🦙 ${r.mg||idx}: 호출 실패 — ${e.message}`,'e');
+  }
+}
+
+// 초기화 시 설정 복원
+window.addEventListener('DOMContentLoaded',()=>{
+  const cfg=loadOllamaCfg();
+  if(document.getElementById('olm_on'))document.getElementById('olm_on').checked=!!cfg.on;
+  if(cfg.url&&document.getElementById('olm_url'))document.getElementById('olm_url').value=cfg.url;
+  if(cfg.model&&document.getElementById('olm_model'))document.getElementById('olm_model').value=cfg.model;
+  renderAccHistory();
+  updateStepper();
+});
+function dlDiff(){
+  if(!DIFF.length){log('대조 데이터 없음','w');return}
+  const wb=XLSX.utils.book_new();
+  const data=DIFF.map(d=>({
+    '유형':d.kind, '관리번호':d.mg||d.key, '주문번호':d.no||'',
+    '판매처명':d.v||'', '판매처 상품코드':d.pc||'', '판매처 상품명':d.pn||'', '판매처 옵션':d.opt||'',
+    '상품코드':d.sc, '상품명':d.sn||'', '자동수량':d.autoQty, '정답수량':d.truthQty,
+    '자동상품코드(SIZE_DIFF)':d.autoSc||'', '자동상품명(SIZE_DIFF)':d.autoSn||''
+  }));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),'Diff');
+  const cnt={MATCH:0,QTY_DIFF:0,SIZE_DIFF:0,MISSING:0,EXTRA:0};
+  DIFF.forEach(d=>{cnt[d.kind]++});
+  const summary=[{'항목':'전체','수':DIFF.length},{'항목':'정확도(%)','수':(cnt.MATCH/DIFF.length*100).toFixed(2)},...Object.entries(cnt).map(([k,v])=>({'항목':k,'수':v}))];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summary),'요약');
+  XLSX.writeFile(wb,`밀잇_정답대조_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+  log('Diff Excel 다운로드 완료','ok');
 }
 
 let editMode=false;
@@ -1003,7 +1597,14 @@ function renderU(){
       document.getElementById('cr_pattern').scrollIntoView({behavior:'smooth',block:'center'});
       document.getElementById('cr_result').focus();
     };
-    tdBtn.appendChild(btn);tr.appendChild(tdBtn);
+    tdBtn.appendChild(btn);
+    if(ollamaIsOn()){
+      const olmBtn=document.createElement('button');
+      olmBtn.className='btn btn-o';olmBtn.style.padding='3px 8px';olmBtn.style.fontSize='10px';olmBtn.style.marginLeft='4px';olmBtn.textContent='🦙';olmBtn.title='Ollama로 SKU 추천';
+      olmBtn.onclick=()=>ollamaSuggestUR(idx);
+      tdBtn.appendChild(olmBtn);
+    }
+    tr.appendChild(tdBtn);
     tb.appendChild(tr);
   });
 }
@@ -1018,7 +1619,7 @@ function dl(){
   log('Excel 다운로드 완료','ok');
 }
 
-function clr(){OD=[];OD_FILES=[];MR=[];UR=[];updateOCard();document.getElementById('lg').innerHTML='<div class="i">// 초기화됨 (내장 파싱규칙 유지)</div>';['ss','ps'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('of').value=''}
+function clr(){OD=[];OD_FILES=[];MR=[];UR=[];RD=[];RD_FILES=[];DIFF=[];ITER=0;updateOCard();updateRsCard();document.getElementById('lg').innerHTML='<div class="i">// 초기화됨 (내장 파싱규칙 유지)</div>';['ss','ps','ds'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('of').value='';document.getElementById('rsf').value='';updateStepper()}
 
 // ── 학습규칙 UI
 function parseResultStr(s){const items=[];s.split(/\s*,\s*/).forEach(part=>{const m=part.match(/^\s*0*(\d+)\s*[:x×*]\s*(\d+)\s*$/);if(m)items.push({code:parseInt(m[1]),qty:parseInt(m[2])});else{const single=part.match(/^\s*0*(\d+)\s*$/);if(single)items.push({code:parseInt(single[1]),qty:1})}});return items}
@@ -1093,8 +1694,55 @@ function addRule(){
 }
 function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
 function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
-function exportRules(){const rs=loadRules();const blob=new Blob([JSON.stringify(rs,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='mealit_learn_rules.json';a.click();URL.revokeObjectURL(url)}
-function importRules(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const arr=JSON.parse(e.target.result);if(!Array.isArray(arr))throw 1;const exist=loadRules();saveRules(exist.concat(arr));renderRules();showMsg('✓ '+arr.length+'개 규칙을 가져왔습니다.','var(--g)')}catch(err){showMsg('JSON 파일 형식 오류','var(--r)')}};r.readAsText(f);inp.value=''}
+function exportRules(){
+  const rs=loadRules();
+  if(!rs.length){showMsg('내보낼 규칙이 없습니다.','var(--m)');return}
+  const payload={version:2,exportedAt:new Date().toISOString(),count:rs.length,rules:rs};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`mealit_learn_rules_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showMsg(`✓ ${rs.length}개 규칙을 내보냈습니다.`,'var(--g)');
+}
+function importRules(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const json=JSON.parse(e.target.result);
+      const arr=Array.isArray(json)?json:(Array.isArray(json.rules)?json.rules:null);
+      if(!arr)throw 1;
+      // 형식 최소 검증
+      const valid=arr.filter(x=>x&&typeof x.pattern==='string'&&Array.isArray(x.results));
+      if(!valid.length){showMsg('가져올 유효한 규칙이 없습니다.','var(--r)');return}
+      const exist=loadRules();
+      const idx=new Map(exist.map((r,i)=>[r.pattern+'|'+(r.target||'all'),i]));
+      let added=0,updated=0,skipped=0;
+      const policy=valid.some(v=>idx.has(v.pattern+'|'+(v.target||'all')))
+        ? (confirm('중복 패턴이 있습니다. 정답 기준으로 덮어쓸까요?\n(취소 시 신규만 추가)') ? 'overwrite' : 'skip')
+        : 'overwrite';
+      valid.forEach(v=>{
+        const key=v.pattern+'|'+(v.target||'all');
+        if(idx.has(key)){
+          if(policy==='overwrite'){
+            const i=idx.get(key);
+            exist[i]={...exist[i],results:v.results,note:v.note||exist[i].note,updatedAt:new Date().toISOString()};
+            updated++;
+          }else{skipped++}
+        }else{
+          exist.push({pattern:v.pattern,target:v.target||'all',results:v.results,note:v.note||'',createdAt:v.createdAt||new Date().toISOString()});
+          added++;
+        }
+      });
+      saveRules(exist);renderRules();
+      showMsg(`✓ 신규 ${added} · 갱신 ${updated} · 스킵 ${skipped}`,'var(--g)');
+    }catch(err){showMsg('JSON 파일 형식 오류','var(--r)')}
+  };
+  r.readAsText(f);inp.value='';
+}
 renderRules();
 </script>
 </body>
