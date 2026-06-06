@@ -580,6 +580,20 @@ function expandColorPack(content, pname){
   });
   return out;
 }
+// 올인원팩 대괄호: [피스타(2) 초코(2) 시리얼(2) ...] → 약어(N) 개별 전개 (규칙서 §7-2)
+function expandBracketPack(content, pname){
+  const out=[];
+  const re=/([가-힣]+)\s*\((\d+)\)/g;
+  let m;
+  while((m=re.exec(content))!==null){
+    const short=m[1].trim(); const q=parseInt(m[2],10)||1;
+    let fl=PACK_FLAVOR_SHORT[short]||null;
+    if(!fl){ for(const k of PACK_KEYS_BY_LEN){ if(short.startsWith(k)){fl=PACK_FLAVOR_SHORT[k];break} } }
+    if(!fl) fl=normFlavor(short);
+    if(fl){ const sku=lookupSKU(fl,'40'); if(sku)out.push({c:sku.c,q}); }
+  }
+  return out;
+}
 function extractTokensToSKUs(addOptText, pname){
   const out=[];
   const text=stripNoise(addOptText);
@@ -614,10 +628,19 @@ function parseOption(option, prodName, prodCode, orderQty){
   else if(infoM){ addPart=infoM[1]; mainPart=opt.replace(/<옵션정보>.*$|<옵션명>.*$/s,'') }
   const dealSkus=applySpecialDeal(mainPart||opt);
   const bundleSkus=applyPackageBundle(mainPart||opt);
-  const packMatch=(mainPart||opt).match(/[(\[]([^()\[\]]+)[)\]]/);
+  const mainSrc=mainPart||opt;
   let colorSkus=[];
-  if(packMatch && /\d+\+/.test(packMatch[1]) && !/맛\s*선택/.test(packMatch[1])){
-    colorSkus=expandColorPack(packMatch[1], pn);
+  // 대괄호 올인원팩: [피스타(2) 초코(2) ...] → 약어(N) 개별 전개 (5/10/11개입 묶음 SKU가 아닐 때만)
+  const brkMatch=mainSrc.match(/\[([^\[\]]*\([0-9]+\)[^\[\]]*)\]/);
+  if(brkMatch && !bundleSkus.length){
+    colorSkus=expandBracketPack(brkMatch[1], pn);
+  }
+  // 색팩 (): 시리얼5+말차5+... → +구분 전개
+  if(!colorSkus.length){
+    const packMatch=mainSrc.match(/[(\[]([^()\[\]]+)[)\]]/);
+    if(packMatch && /\d+\+/.test(packMatch[1]) && !/맛\s*선택/.test(packMatch[1])){
+      colorSkus=expandColorPack(packMatch[1], pn);
+    }
   }
   let mainSkus=[];
   if(addPart){
