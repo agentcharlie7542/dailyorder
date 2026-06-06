@@ -172,8 +172,7 @@ tr.group-edited:hover td{background:#fef9c3}
   <div class="sb">구분자·숫자패턴·대용량·세트·낱포 자동 처리</div>
   <div class="st">✓ 45 SKU · 학습규칙 자동 누적</div>
 </div>
-<div class="ucard" id="oc"
-  onclick="document.getElementById('of').click()"
+<label class="ucard" id="oc" for="of"
   ondragover="ocDrag(event)" ondragleave="ocDragLeave(event)" ondrop="ocDrop(event)">
   <input type="file" id="of" accept=".xlsx,.xls" multiple onchange="loadO(this)">
   <div class="ic">🛒</div>
@@ -181,9 +180,8 @@ tr.group-edited:hover td{background:#fef9c3}
   <div class="sb" id="oc_hint">클릭 또는 파일을 드래그</div>
   <div class="st" id="os"></div>
   <div class="file-tags" id="oc_files"></div>
-</div>
-<div class="ucard" id="rsc"
-  onclick="document.getElementById('rsf').click()"
+</label>
+<label class="ucard" id="rsc" for="rsf"
   ondragover="rscDrag(event)" ondragleave="rscDragLeave(event)" ondrop="rscDrop(event)">
   <input type="file" id="rsf" accept=".xlsx,.xls" multiple onchange="loadR(this)">
   <div class="ic">🎯</div>
@@ -191,7 +189,7 @@ tr.group-edited:hover td{background:#fef9c3}
   <div class="sb" id="rsc_hint">담당자 분리 결과 · 대조용</div>
   <div class="st" id="rss"></div>
   <div class="file-tags" id="rsc_files"></div>
-</div>
+</label>
 </div>
 <div class="acts">
 <button class="btn btn-p" id="mb" onclick="run()" disabled>⚡ 매핑 실행</button>
@@ -315,6 +313,9 @@ tr.group-edited:hover td{background:#fef9c3}
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
+// 전역 에러를 검정 로그창에 그대로 출력 (디버그)
+window.addEventListener('error',e=>{try{log(`JS ERROR: ${e.message} @ ${e.filename||''}:${e.lineno||''}`,'e')}catch(_){}});
+window.addEventListener('unhandledrejection',e=>{try{log(`Promise REJECT: ${e.reason&&e.reason.message||e.reason}`,'e')}catch(_){}});
 const ACC_KEY='mealit_acc_history_v1';
 const OLM_KEY='mealit_ollama_cfg_v1';
 const OLM_MAX=50;
