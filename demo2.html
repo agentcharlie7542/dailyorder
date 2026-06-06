@@ -313,7 +313,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.4';
+const APP_VERSION='V3.5';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -854,41 +854,48 @@ const BUILTIN_RULES=[
 function loadRules(){try{return JSON.parse(localStorage.getItem(CR_KEY)||'[]')}catch(e){return []}}
 function saveRules(rs){localStorage.setItem(CR_KEY,JSON.stringify(rs))}
 function applyCustomRules(productName,optionRaw,orderQty){
-  const rules=[...BUILTIN_RULES,...loadRules()];
-  const matched=[];
+  const builtin=BUILTIN_RULES, user=loadRules();
+  const rules=[...builtin,...user];
   const pnNorm=normPnJS(productName);
   const optNorm=normOptJS(optionRaw, productName);
   const allNorm=pnNorm+' '+optNorm;
-  rules.forEach(rule=>{
+  const candidates=[];
+  rules.forEach((rule,idx)=>{
     const target=rule.target||'all';
     const hayRaw=target==='option'?optionRaw:target==='name'?productName:(productName+' '+optionRaw);
     const hayNorm=target==='option'?optNorm:target==='name'?pnNorm:allNorm;
-    let isMatch=false;
+    let isMatch=false, exact=false;
     try{
       if(/^\/.+\/[gimsuy]*$/.test(rule.pattern)){
         const m=rule.pattern.match(/^\/(.+)\/([gimsuy]*)$/);
         const re=new RegExp(m[1],m[2]);
         isMatch=re.test(hayRaw)||re.test(hayNorm);
       } else {
-        const pat=rule.pattern;
-        const patLow=pat.toLowerCase();
-        isMatch = hayNorm===pat || hayNorm.toLowerCase().includes(patLow) || hayRaw.toLowerCase().includes(patLow);
+        const pat=rule.pattern, patLow=pat.toLowerCase();
+        exact=(hayNorm===pat);
+        isMatch = exact || hayNorm.toLowerCase().includes(patLow) || hayRaw.toLowerCase().includes(patLow);
       }
     }catch(e){isMatch=false}
     if(!isMatch)return;
-    // productName 매칭(룰셋 충돌 방지): 정답파일 룰이 productName을 지정한 경우 상품명도 일치해야 함
-    if(rule.productName){
-      const rpn=normPnJS(rule.productName);
-      if(pnNorm!==rpn)return;
-    }
-    rule.results.forEach(r=>{
-      const code=padCode(r.code);
-      const name=SKU_CATALOG_ALL[code]||('코드 '+code);
-      // 정답 파일은 옵션 1단위 구성으로 기록 → 주문수량 곱하지 않음
-      matched.push({c:code,n:name,q:r.qty});
-    });
+    // productName 지정 룰은 상품명도 일치해야 적용 (룰셋 충돌 방지)
+    if(rule.productName && normPnJS(rule.productName)!==pnNorm)return;
+    candidates.push({rule, exact, len:(rule.pattern||'').length, isUser: idx>=builtin.length});
   });
-  return matched;
+  if(!candidates.length)return [];
+  // 매칭 룰이 여러 개여도 "최적 1개"만 적용 (누적 금지 → 수량 부풀림 방지)
+  // 우선순위: 정확일치 > 사용자규칙 > 더 긴(구체적) 패턴
+  candidates.sort((a,b)=>{
+    if(a.exact!==b.exact)return a.exact?-1:1;
+    if(a.isUser!==b.isUser)return a.isUser?-1:1;
+    return b.len-a.len;
+  });
+  // 선택된 1개 룰 내부에서만 동일 SKU 합산
+  const acc=new Map();
+  candidates[0].rule.results.forEach(r=>{
+    const code=padCode(r.code);
+    acc.set(code,(acc.get(code)||0)+(Number(r.qty)||0));
+  });
+  return [...acc].map(([code,q])=>({c:code,n:SKU_CATALOG_ALL[code]||('코드 '+code),q}));
 }
 
 function run(){
@@ -1105,7 +1112,7 @@ function renderDiff(){
     const learnable=d.kind!=='MATCH'&&d.truthQty>0&&!seenKey.has(d.key);
     if(learnable)seenKey.add(d.key);
     let learnCell='';
-    if(learnable){ const ki=window.DIFF_RENDER_KEYS.push(d.key)-1; learnCell=`<button class="btn btn-y" style="padding:3px 8px;font-size:10px" onclick="learnOneFromDiff(window.DIFF_RENDER_KEYS[${ki}])">+학습</button>`; }
+    if(learnable){ const ki=window.DIFF_RENDER_KEYS.push(d.key)-1; learnCell=`<button class="btn btn-y" style="padding:3px 8px;font-size:10px" onclick="learnOneFromDiff(window.DIFF_RENDER_KEYS[${ki}],this)">+학습</button>`; }
     const rowStyle=d.scope?' style="opacity:.6"':'';
     return `<tr${rowStyle}><td><span class="kbadge kb-${d.kind}">${d.kind}</span></td><td>${d.mg||''}</td><td>${d.no||''}</td><td title="${(d.pn||'').replace(/"/g,'&quot;')}">${(d.pn||'').slice(0,30)}</td><td title="${opt.replace(/"/g,'&quot;')}">${opt}</td><td>${d.sc}</td><td title="${(d.sn||'').replace(/"/g,'&quot;')}">${(d.sn||'').slice(0,28)}</td><td style="text-align:right">${d.autoQty}</td><td style="text-align:right">${d.truthQty}</td><td>${note}</td><td>${learnCell}</td></tr>`;
   }).join('');
@@ -1133,21 +1140,28 @@ function buildLearnRuleForKey(key){
   const note=`자동학습 ${new Date().toISOString().slice(0,10)} · M:${cnt.MATCH}/Q:${cnt.QTY_DIFF}/S:${cnt.SIZE_DIFF}/Mi:${cnt.MISSING}/E:${cnt.EXTRA}`;
   return {pattern, target:'all', results, note, createdAt:new Date().toISOString(), _origin:'diff', _key:String(key)};
 }
-function learnOneFromDiff(key){
+function learnOneFromDiff(key,btn){
   const rule=buildLearnRuleForKey(key);
-  if(!rule){log(`학습 실패: ${key} (정답 SKU 없음/패턴 부재)`,'e');return}
-  const rs=loadRules();
-  const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
-  if(dupIdx>=0){
-    // 같은 패턴이 이미 있으면 결과만 교체 (정답이 곧 최신)
-    rs[dupIdx]={...rs[dupIdx],results:rule.results,note:rule.note,updatedAt:new Date().toISOString()};
-    saveRules(rs);renderRules();
-    log(`↻ 갱신: ${rule.pattern.slice(0,40)}… (${rule.results.length}개)`,'c');
+  if(!rule){
+    log(`학습 실패: 정답 SKU 없음/패턴 부재`,'e');
+    if(btn){btn.textContent='✗ 불가';btn.style.background='var(--r)'}
     return;
   }
-  rs.push(rule);
+  const rs=loadRules();
+  const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
+  let msg;
+  if(dupIdx>=0){
+    rs[dupIdx]={...rs[dupIdx],results:rule.results,note:rule.note,updatedAt:new Date().toISOString()};
+    msg=`↻ 갱신: ${rule.pattern.slice(0,40)}… (${rule.results.length}개 SKU)`;
+  }else{
+    rs.push(rule);
+    msg=`+ 학습규칙 추가: ${rule.pattern.slice(0,40)}… → ${rule.results.length}개 SKU`;
+  }
   saveRules(rs);renderRules();
-  log(`+ 학습규칙: ${rule.pattern.slice(0,40)}… → ${rule.results.length}개 SKU`,'c');
+  log(msg,'c');
+  // 버튼 즉시 피드백
+  if(btn){btn.textContent='✓ 학습됨';btn.style.background='var(--g)';btn.disabled=true}
+  if(typeof showMsg==='function')showMsg(`✓ 학습규칙 ${dupIdx>=0?'갱신':'추가'} (총 ${rs.length}개) · [학습 후 재매핑]으로 적용`,'var(--g)');
 }
 function learnAllFromDiff(silent=false){
   const keys=new Set();
