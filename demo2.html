@@ -401,8 +401,8 @@ function detectResultHeaders(rows){
   const keys=Object.keys(rows[0]);
   return {
     orderNo: pickHdr(keys,['주문번호','주문ID','orderno','ordernumber','ordno']),
-    itemNo : pickHdr(keys,['품목별주문번호','품목별주문ID','품목주문번호','itemorderno','itemno','품목번호']),
-    skuCode: pickHdr(keys,['상품코드','SKU코드','SKU','code','관리번호','itemcode','품목코드']),
+    itemNo : pickHdr(keys,['관리번호','품목별주문번호','품목별주문ID','품목주문번호','itemorderno','itemno','품목번호','라인번호']),
+    skuCode: pickHdr(keys,['상품코드','SKU코드','SKU','code','itemcode','품목코드']),
     skuName: pickHdr(keys,['상품명','SKU명','품명','productname','itemname']),
     qty    : pickHdr(keys,['수량','출고수량','qty','quantity','출하수량','선택수량']),
   };
@@ -422,7 +422,7 @@ function loadOneResultFile(f){
     if(!rows.length){log(`✕ ${f.name}: 빈 시트`,'e');return}
     const hdr=detectResultHeaders(rows);
     const missing=[];
-    if(!hdr.orderNo)missing.push('주문번호');
+    if(!hdr.orderNo && !hdr.itemNo)missing.push('주문번호 또는 관리번호(품목별주문번호)');
     if(!hdr.skuCode)missing.push('상품코드');
     if(!hdr.qty)missing.push('수량');
     if(missing.length){
