@@ -262,8 +262,8 @@ tr.group-edited:hover td{background:#fef9c3}
   <input id="cr_product" type="text" placeholder="예: 밀잇 식단관리 단백질 쉐이크 (비우면 전 상품 적용)">
 </div>
 <div class="crow">
-  <div class="fld"><label>매칭 패턴 <span style="font-weight:400;color:var(--m)">— 옵션 텍스트 일부 또는 <code>/정규식/i</code></span></label>
-    <input id="cr_pattern" type="text" placeholder="예: 마스터 키트 5통+포켓 21개입">
+  <div class="fld"><label>매칭 패턴 <span style="font-weight:400;color:var(--m)">— 옵션 텍스트 일부 또는 <code>/정규식/i</code> (길면 자동 줄바꿈)</span></label>
+    <textarea id="cr_pattern" rows="2" placeholder="예: 마스터 키트 5통+포켓 21개입" style="resize:vertical;min-height:38px;line-height:1.4;white-space:pre-wrap;word-break:break-all" oninput="autoGrow(this)"></textarea>
   </div>
   <div class="fld"><label>매칭 대상</label>
     <select id="cr_target">
@@ -319,7 +319,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.2';
+const APP_VERSION='V4.3';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1177,7 +1177,7 @@ function learnOneFromDiff(key,btn){
   const elR=document.getElementById('cr_result');
   const elN=document.getElementById('cr_note');
   if(elProd)elProd.value=rule.productName||rule.pn||'';
-  if(elP)elP.value=rule.pattern;
+  if(elP){elP.value=rule.pattern;if(typeof autoGrow==='function')autoGrow(elP);}
   if(elT)elT.value=rule.target||'all';
   if(elR)elR.value=rule.results.map(r=>`${padCode(r.code)}:${r.qty}`).join(', ');
   if(elN)elN.value=rule.note||'';
@@ -1786,6 +1786,8 @@ function renderRules(){
   }).join('');
 }
 function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+// textarea 높이를 내용에 맞게 자동 확장
+function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,200)+'px'}
 function addRule(){
   const productName=document.getElementById('cr_product').value.trim();
   const pattern=document.getElementById('cr_pattern').value.trim();
