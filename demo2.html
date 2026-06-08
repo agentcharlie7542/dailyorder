@@ -319,7 +319,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.5';
+const APP_VERSION='V4.6';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1822,28 +1822,49 @@ function addRule(){
   const invalid=results.find(r=>!SKU_CATALOG_ALL[padCode(r.code)]);
   if(invalid){showMsg('상품코드 '+invalid.code+'는 카탈로그에 없습니다.','var(--r)');return}
   const rs=loadRules();
+  const before=rs.length;
   const now=new Date().toISOString();
   const rule={pattern,target,results,note,createdAt:now,updatedAt:now};
   if(productName)rule.productName=productName;
   // 동일 (상품명,패턴,대상) 있으면 갱신, 없으면 추가
   const dupIdx=rs.findIndex(r=>r.pattern===pattern&&(r.target||'all')===target&&(r.productName||'')===(productName||''));
+  let kind;
   if(dupIdx>=0){
     const oldRes=JSON.stringify(rs[dupIdx].results);
     rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:now};
-    const changed=oldRes!==JSON.stringify(results);
-    showMsg(changed?`✓ 기존 규칙 갱신 (결과 변경됨) · 총 ${rs.length}개`:`✓ 동일 규칙 이미 있음 (변경 없음) · 총 ${rs.length}개`,'var(--g)');
-    log(`↻ 규칙 갱신: ${pattern.slice(0,35)}… → ${results.map(r=>padCode(r.code)+':'+r.qty).join(',')}`,'c');
-  }else{
-    rs.push(rule);
-    showMsg(`✓ 학습규칙 추가 · 총 ${rs.length}개`,'var(--g)');
-    log(`+ 규칙 추가: ${pattern.slice(0,35)}… → ${results.map(r=>padCode(r.code)+':'+r.qty).join(',')}`,'c');
-  }
+    kind=oldRes!==JSON.stringify(results)?'updated':'same';
+  }else{ rs.push(rule); kind='added'; }
   saveRules(rs);
   document.getElementById('cr_product').value='';
   document.getElementById('cr_pattern').value='';
   document.getElementById('cr_result').value='';
   document.getElementById('cr_note').value='';
   renderRules();
+  // 명확한 피드백 + 카운트 강조
+  const resStr=results.map(r=>padCode(r.code)+':'+r.qty).join(', ');
+  if(kind==='added'){
+    showMsg(`✓ 신규 학습규칙 추가 (${before} → ${rs.length}개)`,'var(--g)');
+    log(`+ 규칙 추가: ${pattern.slice(0,30)}… → ${resStr}`,'c');
+    flashCount('add');
+  }else if(kind==='updated'){
+    showMsg(`✓ 기존 규칙 갱신 — 결과 변경됨 (총 ${rs.length}개, 중복 방지로 개수 유지)`,'var(--g)');
+    log(`↻ 규칙 갱신(결과변경): ${pattern.slice(0,30)}… → ${resStr}`,'c');
+    flashCount('update');
+  }else{
+    showMsg(`ℹ 이미 동일한 규칙이 있습니다 — 추가 안 함 (총 ${rs.length}개 유지)`,'var(--y)');
+    log(`= 동일 규칙 이미 존재: ${pattern.slice(0,30)}…`,'w');
+    flashCount('same');
+  }
+}
+// 등록 규칙 카운트 강조 (추가=초록, 갱신=파랑, 동일=노랑 깜빡)
+function flashCount(kind){
+  const el=document.getElementById('cr_count');
+  if(!el)return;
+  const c=kind==='add'?'#059669':kind==='update'?'#4f46e5':'#d97706';
+  const p=el.parentElement;if(!p)return;
+  const prev=p.style.cssText;
+  p.style.transition='background .2s';p.style.background=c+'22';p.style.color=c;p.style.borderRadius='4px';p.style.padding='2px 6px';
+  setTimeout(()=>{p.style.cssText=prev},1200);
 }
 function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
 function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
