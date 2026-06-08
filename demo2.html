@@ -284,6 +284,10 @@ tr.group-edited:hover td{background:#fef9c3}
 <div class="fld" style="margin-bottom:12px"><label>메모 (선택)</label>
   <input id="cr_note" type="text" placeholder="예: 카페24 마스터 키트 패키지">
 </div>
+<div class="acts" style="margin-bottom:8px">
+<button class="btn btn-o" onclick="testRuleMatch()" title="위 상품명+패턴(원본 옵션)을 실제 파이프라인에 넣어 어떤 규칙/파서로 처리되는지 확인">🔍 이 옵션 매칭 테스트</button>
+<span id="cr_test" style="font-size:11px;color:var(--m)"></span>
+</div>
 <div class="acts">
 <button class="btn btn-g" onclick="addRule()">＋ 학습규칙 추가</button>
 <button class="btn btn-y" id="learnAllTruthBtn" onclick="learnAllFromTruth()" disabled>📥 정답 파일 → 규칙 등록</button>
@@ -319,7 +323,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.6';
+const APP_VERSION='V4.7';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1865,6 +1869,48 @@ function flashCount(kind){
   const prev=p.style.cssText;
   p.style.transition='background .2s';p.style.background=c+'22';p.style.color=c;p.style.borderRadius='4px';p.style.padding='2px 6px';
   setTimeout(()=>{p.style.cssText=prev},1200);
+}
+// 매칭 테스트: 상품명 + 패턴(원본 옵션)을 실제 파이프라인에 넣어 어떤 규칙/파서로 처리되는지 진단
+function testRuleMatch(){
+  const pn=document.getElementById('cr_product').value.trim();
+  const opt=document.getElementById('cr_pattern').value.trim();
+  const el=document.getElementById('cr_test');
+  if(!opt){el.innerHTML='<span style="color:var(--r)">매칭 패턴(옵션)을 입력하세요</span>';return}
+  const pnNorm=normPnJS(pn), optNorm=normOptJS(opt,pn), allNorm=pnNorm+' '+optNorm;
+  // 1) 매칭되는 모든 규칙 수집 (applyCustomRules 내부 로직 재현)
+  const rules=[...BUILTIN_RULES,...loadRules()];
+  const hits=[];
+  rules.forEach((r,idx)=>{
+    const target=r.target||'all';
+    const hayNorm=target==='option'?optNorm:target==='name'?pnNorm:allNorm;
+    const hayRaw=target==='option'?opt:target==='name'?pn:(pn+' '+opt);
+    let m=false,exact=false;
+    try{
+      if(/^\/.+\/[gimsuy]*$/.test(r.pattern)){const mm=r.pattern.match(/^\/(.+)\/([gimsuy]*)$/);const re=new RegExp(mm[1],mm[2]);m=re.test(hayRaw)||re.test(hayNorm)}
+      else{const p=r.pattern.toLowerCase();exact=(hayNorm===r.pattern);m=exact||hayNorm.toLowerCase().includes(p)||hayRaw.toLowerCase().includes(p)}
+    }catch(e){}
+    if(!m)return;
+    if(r.productName&&normPnJS(r.productName)!==pnNorm)return;
+    hits.push({idx,exact,pn:r.productName,pat:r.pattern,res:r.results,isUser:idx>=BUILTIN_RULES.length});
+  });
+  const applied=applyCustomRules(pn,opt,1);
+  let out='';
+  if(applied.length){
+    out=`<b style="color:var(--g)">✓ 규칙 매칭 → ${applied.map(x=>padCode(x.c)+':'+x.q).join(', ')}</b> (매칭규칙 ${hits.length}개 중 최적1개 적용)`;
+    if(hits.length>1)out+=` <span style="color:var(--y)">· ${hits.length}개 충돌 (정확일치>상품명지정>최신 순)</span>`;
+  }else{
+    const parsed=parseOption(opt,pn,'',1);
+    if(parsed.length)out=`<b style="color:var(--a)">규칙 없음 → 파서 처리: ${parsed.map(x=>padCode(x.c)+':'+x.q).join(', ')}</b>`;
+    else out=`<b style="color:var(--r)">✗ 규칙·파서 모두 미매칭 (미매핑됨)</b>`;
+  }
+  // 진단 힌트
+  if(!applied.length && hits.length===0){
+    out+=`<br><span style="color:#6b7280">· 정규화 옵션: "${escapeHtml(optNorm.slice(0,60))}" — 등록된 규칙 패턴과 텍스트 불일치. [📥 정답 파일 → 규칙 등록] 또는 +학습으로 이 옵션을 등록하세요.</span>`;
+  }else if(hits.length>1){
+    out+=`<br><span style="color:#6b7280">충돌 규칙: `+hits.slice(0,4).map(h=>`[${h.isUser?'사용자':'내장'}${h.exact?'·정확':''}] ${h.res.map(x=>padCode(x.code)+':'+x.qty).join(',')}`).join(' / ')+`</span>`;
+  }
+  el.innerHTML=out;
+  log(`매칭 테스트: ${applied.length?'규칙적용':'파서/미매핑'} · 후보 ${hits.length}개`,'i');
 }
 function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
 function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
