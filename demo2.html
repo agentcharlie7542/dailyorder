@@ -257,8 +257,12 @@ tr.group-edited:hover td{background:#fef9c3}
   미매핑(★) 또는 잘못 분류된 케이스의 <b>매칭 패턴</b>과 <b>매핑 결과</b>를 등록하면 다음 실행부터 ① 단계로 자동 누적되어 적용됩니다.
   <br>입력 예시: 패턴 <code>마스터 키트 5통+포켓 21개입</code> · 결과 <code>35:1, 24:5, 64:1</code> (보틀 1개 + 쿠앤크 560g 5개 + 스타터팩 7개입 1개)
 </div>
+<div class="fld" style="margin-bottom:10px">
+  <label>상품명 <span style="font-weight:400;color:var(--m)">— 지정 시 이 상품에서만 매칭 (비우면 모든 상품). 같은 옵션이 상품마다 다른 SKU일 때 필수</span></label>
+  <input id="cr_product" type="text" placeholder="예: 밀잇 식단관리 단백질 쉐이크 (비우면 전 상품 적용)">
+</div>
 <div class="crow">
-  <div class="fld"><label>매칭 패턴 (텍스트 일부 또는 <code>/정규식/i</code>)</label>
+  <div class="fld"><label>매칭 패턴 <span style="font-weight:400;color:var(--m)">— 옵션 텍스트 일부 또는 <code>/정규식/i</code></span></label>
     <input id="cr_pattern" type="text" placeholder="예: 마스터 키트 5통+포켓 21개입">
   </div>
   <div class="fld"><label>매칭 대상</label>
@@ -315,7 +319,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.9';
+const APP_VERSION='V4.0';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1142,21 +1146,20 @@ function buildLearnRuleForKey(key){
   // 해당 키의 자동 컨텍스트 (옵션/상품명)
   const head=DIFF.find(d=>d.key===key&&(d.opt||d.pn));
   if(!head){return null}
-  const pattern=String(head.opt||head.pn||'').trim();
+  // 패턴 = 정규화된 옵션 (raw 마크업 제거 → 재업로드 시 매칭). 옵션 없으면 정규화 상품명
+  const pattern=String(head.optNorm||normOptJS(head.opt||'',head.pn||'')||head.pnNorm||head.pn||'').trim();
   if(!pattern)return null;
-  // 정답 SKU 리스트 = 해당 키에서 truthQty>0 (MATCH/QTY_DIFF/SIZE_DIFF/MISSING 의 정답 기준)
-  // EXTRA(정답에 없음)는 결과에서 제외
+  const productName=String(head.pn||'').trim();  // 상품명 게이팅 (같은 옵션 다른 상품 충돌 방지)
+  // 정답 SKU 리스트 = 해당 키에서 truthQty>0 (EXTRA는 제외)
   const truth=DIFF.filter(d=>d.key===key&&d.kind!=='EXTRA'&&d.truthQty>0);
   if(!truth.length)return null;
-  // SIZE_DIFF는 정답 SKU(sc)를 사용 (자동의 autoSc 가 아님)
   const results=truth.map(d=>({code:parseInt(d.sc,10),qty:d.truthQty}));
-  // 카탈로그 검증
   const invalid=results.find(r=>!SKU_CATALOG_ALL[padCode(r.code)]);
   if(invalid)return null;
-  const cnt={MATCH:0,QTY_DIFF:0,SIZE_DIFF:0,MISSING:0,EXTRA:0};
-  DIFF.filter(d=>d.key===key).forEach(d=>{cnt[d.kind]++});
-  const note=`자동학습 ${new Date().toISOString().slice(0,10)} · M:${cnt.MATCH}/Q:${cnt.QTY_DIFF}/S:${cnt.SIZE_DIFF}/Mi:${cnt.MISSING}/E:${cnt.EXTRA}`;
-  return {pattern, target:'all', results, note, createdAt:new Date().toISOString(), _origin:'diff', _key:String(key)};
+  const note=`정답학습 ${new Date().toISOString().slice(0,10)}`;
+  const rule={pattern, target:'all', results, note, createdAt:new Date().toISOString(), _origin:'diff', _key:String(key)};
+  if(productName)rule.productName=productName;
+  return rule;
 }
 // +학습 클릭 → 하단 "사용자 학습규칙 추가" 폼에 채워넣기 (검수 후 [+ 학습규칙 추가]로 사용자가 확정)
 function learnOneFromDiff(key,btn){
@@ -1166,10 +1169,12 @@ function learnOneFromDiff(key,btn){
     if(btn){btn.textContent='✗ 불가';btn.style.background='var(--r)'}
     return;
   }
+  const elProd=document.getElementById('cr_product');
   const elP=document.getElementById('cr_pattern');
   const elT=document.getElementById('cr_target');
   const elR=document.getElementById('cr_result');
   const elN=document.getElementById('cr_note');
+  if(elProd)elProd.value=rule.productName||rule.pn||'';
   if(elP)elP.value=rule.pattern;
   if(elT)elT.value=rule.target||'all';
   if(elR)elR.value=rule.results.map(r=>`${padCode(r.code)}:${r.qty}`).join(', ');
@@ -1775,23 +1780,29 @@ function renderRules(){
 }
 function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function addRule(){
+  const productName=document.getElementById('cr_product').value.trim();
   const pattern=document.getElementById('cr_pattern').value.trim();
   const target=document.getElementById('cr_target').value;
   const resultStr=document.getElementById('cr_result').value.trim();
   const note=document.getElementById('cr_note').value.trim();
-  if(!pattern){showMsg('패턴을 입력해 주세요.','var(--r)');return}
+  if(!pattern){showMsg('매칭 패턴(옵션)을 입력해 주세요.','var(--r)');return}
   const results=parseResultStr(resultStr);
   if(results.length===0){showMsg('매핑 결과 형식이 잘못되었습니다. 예: 35:1, 24:2','var(--r)');return}
   const invalid=results.find(r=>!SKU_CATALOG_ALL[padCode(r.code)]);
   if(invalid){showMsg('상품코드 '+invalid.code+'는 카탈로그에 없습니다.','var(--r)');return}
   const rs=loadRules();
-  rs.push({pattern,target,results,note,createdAt:new Date().toISOString()});
+  const rule={pattern,target,results,note,createdAt:new Date().toISOString()};
+  if(productName)rule.productName=productName;
+  // 동일 (상품명,패턴,대상) 있으면 갱신, 없으면 추가
+  const dupIdx=rs.findIndex(r=>r.pattern===pattern&&(r.target||'all')===target&&(r.productName||'')===(productName||''));
+  if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:new Date().toISOString()};showMsg('✓ 기존 규칙을 갱신했습니다.','var(--g)');}
+  else{rs.push(rule);showMsg('✓ 학습규칙이 추가되었습니다.','var(--g)');}
   saveRules(rs);
+  document.getElementById('cr_product').value='';
   document.getElementById('cr_pattern').value='';
   document.getElementById('cr_result').value='';
   document.getElementById('cr_note').value='';
   renderRules();
-  showMsg('✓ 학습규칙이 추가되었습니다.','var(--g)');
 }
 function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
 function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
@@ -1837,6 +1848,7 @@ function hardReset(){
   const olmUrl=document.getElementById('olm_url');if(olmUrl)olmUrl.value='http://localhost:11434';
   const olmModel=document.getElementById('olm_model');if(olmModel)olmModel.value='qwen2.5:7b';
   const olmMsg=document.getElementById('olm_msg');if(olmMsg)olmMsg.textContent='';
+  ['cr_product','cr_pattern','cr_result','cr_note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   showMsg('✓ 모든 학습 데이터를 초기화했습니다.','var(--g)');
   log('🧹 모든 학습 데이터 초기화 완료','ok');
 }
