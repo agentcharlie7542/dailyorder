@@ -319,7 +319,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.4';
+const APP_VERSION='V4.5';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -904,14 +904,17 @@ function applyCustomRules(productName,optionRaw,orderQty){
     if(!isMatch)return;
     // productName 지정 룰은 상품명도 일치해야 적용 (룰셋 충돌 방지)
     if(rule.productName && normPnJS(rule.productName)!==pnNorm)return;
-    candidates.push({rule, exact, len:(rule.pattern||'').length, isUser: idx>=builtin.length});
+    const ts=Date.parse(rule.updatedAt||rule.createdAt||'')||0;
+    candidates.push({rule, exact, len:(rule.pattern||'').length, isUser: idx>=builtin.length, hasPn:!!rule.productName, ts});
   });
   if(!candidates.length)return [];
   // 매칭 룰이 여러 개여도 "최적 1개"만 적용 (누적 금지 → 수량 부풀림 방지)
-  // 우선순위: 정확일치 > 사용자규칙 > 더 긴(구체적) 패턴
+  // 우선순위: 정확일치 > 상품명지정 > 사용자규칙 > 최신(사용자 최근 수정이 이김) > 긴 패턴
   candidates.sort((a,b)=>{
     if(a.exact!==b.exact)return a.exact?-1:1;
+    if(a.hasPn!==b.hasPn)return a.hasPn?-1:1;
     if(a.isUser!==b.isUser)return a.isUser?-1:1;
+    if(a.ts!==b.ts)return b.ts-a.ts;
     return b.len-a.len;
   });
   // 선택된 1개 룰 내부에서만 동일 SKU 합산
@@ -1819,12 +1822,22 @@ function addRule(){
   const invalid=results.find(r=>!SKU_CATALOG_ALL[padCode(r.code)]);
   if(invalid){showMsg('상품코드 '+invalid.code+'는 카탈로그에 없습니다.','var(--r)');return}
   const rs=loadRules();
-  const rule={pattern,target,results,note,createdAt:new Date().toISOString()};
+  const now=new Date().toISOString();
+  const rule={pattern,target,results,note,createdAt:now,updatedAt:now};
   if(productName)rule.productName=productName;
   // 동일 (상품명,패턴,대상) 있으면 갱신, 없으면 추가
   const dupIdx=rs.findIndex(r=>r.pattern===pattern&&(r.target||'all')===target&&(r.productName||'')===(productName||''));
-  if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:new Date().toISOString()};showMsg('✓ 기존 규칙을 갱신했습니다.','var(--g)');}
-  else{rs.push(rule);showMsg('✓ 학습규칙이 추가되었습니다.','var(--g)');}
+  if(dupIdx>=0){
+    const oldRes=JSON.stringify(rs[dupIdx].results);
+    rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:now};
+    const changed=oldRes!==JSON.stringify(results);
+    showMsg(changed?`✓ 기존 규칙 갱신 (결과 변경됨) · 총 ${rs.length}개`:`✓ 동일 규칙 이미 있음 (변경 없음) · 총 ${rs.length}개`,'var(--g)');
+    log(`↻ 규칙 갱신: ${pattern.slice(0,35)}… → ${results.map(r=>padCode(r.code)+':'+r.qty).join(',')}`,'c');
+  }else{
+    rs.push(rule);
+    showMsg(`✓ 학습규칙 추가 · 총 ${rs.length}개`,'var(--g)');
+    log(`+ 규칙 추가: ${pattern.slice(0,35)}… → ${results.map(r=>padCode(r.code)+':'+r.qty).join(',')}`,'c');
+  }
   saveRules(rs);
   document.getElementById('cr_product').value='';
   document.getElementById('cr_pattern').value='';
@@ -1849,13 +1862,16 @@ function cleanupRules(){
       if(np&&np!==r.pattern){r.pattern=np;migrated++}
     }
   });
-  // 2) (pattern,target,productName) 중복 병합 — 뒤(최신)가 우선
+  // 2) (pattern,target,productName) 중복 병합 — 최신 타임스탬프 결과 유지
+  const tsOf=r=>Date.parse(r.updatedAt||r.createdAt||'')||0;
   const idxByKey=new Map();
   const merged=[];
   rs.forEach(r=>{
     const k=r.pattern+'|'+(r.target||'all')+'|'+(r.productName||'');
-    if(idxByKey.has(k)){ merged[idxByKey.get(k)]=r; }
-    else{ idxByKey.set(k,merged.length); merged.push(r); }
+    if(idxByKey.has(k)){
+      const i=idxByKey.get(k);
+      if(tsOf(r)>=tsOf(merged[i]))merged[i]=r;  // 더 최신이면 교체
+    }else{ idxByKey.set(k,merged.length); merged.push(r); }
   });
   // 3) 무효 제거 (빈 패턴/빈 결과)
   const cleaned=merged.filter(r=>r.pattern&&r.results&&r.results.length);
