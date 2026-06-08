@@ -314,7 +314,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.7';
+const APP_VERSION='V3.8';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1318,27 +1318,43 @@ function learnUnmappedFromTruth(){
   log(`미매핑 → 정답 학습: 신규 ${added} · 갱신 ${updated} · 라인ID매칭 ${byId} · 패턴매칭 ${byPat} · 정답없음 ${notFound} · 패턴부재 ${noPattern}`,'ok');
 }
 
-// 정답 파일 통째로 → 학습규칙 등록 (UR 무관, 정답 파일이 곧 매핑 사전인 형식 지원)
+// 정답 파일 통째로 → 학습규칙 등록 (정규화 패턴 + productName → raw 주문과 실제 매칭)
 function learnAllFromTruth(){
   if(!RD.length){log('정답 파일이 없습니다','e');return}
-  const {patIdx}=buildTruthIndices();
-  if(!patIdx.size){log('정답 파일에서 패턴 인덱스를 만들지 못했습니다 (옵션/판매처 상품명 컬럼 누락)','e');return}
-  if(!confirm(`정답 파일에서 ${patIdx.size}개 패턴을 학습규칙으로 일괄 등록할까요?\n(중복 패턴은 정답 기준 갱신)`))return;
+  // 정규화 (상품명, 옵션) 키로 그룹화 → 옵션별 1규칙 (runDiff와 동일 키 체계)
+  const groups=new Map(); // bk → {pn, optNorm, pnNorm, skus:Map}
+  RD.forEach(r=>{
+    const h=r._hdr;
+    const sc=padCode(r[h.skuCode]);
+    if(!sc||!SKU_CATALOG_ALL[sc])return;
+    const qty=Number(r[h.qty])||1;
+    const vpn=h.vendorPn?String(r[h.vendorPn]||'').trim():'';
+    const vopt=h.option?String(r[h.option]||'').trim():'';
+    if(!vpn&&!vopt)return;
+    const pnN=normPnJS(vpn), optN=normOptJS(vopt,vpn);
+    const bk=pnN+'|||'+optN;
+    if(!groups.has(bk))groups.set(bk,{pn:vpn,optNorm:optN,pnNorm:pnN,skus:new Map()});
+    const g=groups.get(bk);
+    g.skus.set(sc,(g.skus.get(sc)||0)+qty);
+  });
+  if(!groups.size){log('정답 파일에서 옵션/판매처 상품명 컬럼을 찾지 못했습니다','e');return}
+  if(!confirm(`정답 파일 ${groups.size}개 옵션을 학습규칙으로 등록할까요?\n(정규화 패턴 + 상품명 매칭 → raw 주문에 실제 적용 · 중복은 갱신)`))return;
   const rs=loadRules();
   let added=0,updated=0,skipped=0;
-  patIdx.forEach(v=>{
-    const pattern=(v.option||v.vendorPn||'').trim();
+  groups.forEach(g=>{
+    // 패턴 = 정규화된 옵션 (옵션 없으면 정규화 상품명)
+    const pattern=(g.optNorm||g.pnNorm||'').trim();
     if(!pattern){skipped++;return}
-    const results=[...v.skus.entries()].map(([c,q])=>({code:parseInt(c,10),qty:q}));
+    const results=[...g.skus.entries()].map(([c,q])=>({code:parseInt(c,10),qty:q}));
     if(!results.length){skipped++;return}
-    const note=`자동학습(정답파일 전체) ${new Date().toISOString().slice(0,10)}`;
-    const rule={pattern,target:'all',results,note,createdAt:new Date().toISOString(),_origin:'truth-all'};
-    const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&r.target===rule.target);
-    if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note,updatedAt:new Date().toISOString()};updated++}
+    const rule={pattern,target:'all',productName:g.pn,results,
+      note:`정답파일 학습 ${new Date().toISOString().slice(0,10)}`,createdAt:new Date().toISOString(),_origin:'truth-all'};
+    const dupIdx=rs.findIndex(r=>r.pattern===rule.pattern&&(r.target||'all')===rule.target&&(r.productName||'')===(rule.productName||''));
+    if(dupIdx>=0){rs[dupIdx]={...rs[dupIdx],results,note:rule.note,updatedAt:new Date().toISOString()};updated++}
     else{rs.push(rule);added++}
   });
   saveRules(rs);renderRules();
-  log(`정답 파일 → 학습규칙 등록: 신규 ${added} · 갱신 ${updated} · 스킵 ${skipped}`,'ok');
+  log(`정답 파일 → 학습규칙: 신규 ${added} · 갱신 ${updated} · 스킵 ${skipped} (정규화 패턴 · 다음 매핑부터 적용)`,'ok');
 }
 
 // 명시적 [정답 대조 실행]
