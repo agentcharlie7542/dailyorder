@@ -319,7 +319,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.3';
+const APP_VERSION='V4.4';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -611,18 +611,37 @@ function extractTokensToSKUs(addOptText, pname){
   const text=stripNoise(addOptText);
   if(!text)return out;
   const tokens=text.split(/[,/]/).map(t=>t.trim()).filter(t=>t.length>0);
-  for(const tok of tokens){
-    const clean=stripNoise(tok);
-    if(!clean)continue;
-    if(/^(선택안함|선택\s*안함|선택없음|보틀\s*필요\s*없음|없음|-)$/.test(clean))continue;
-    // 색팩/세트 잔재(1+1, 5+2 등)만 skip — 사이즈 힌트 (450g)/(560g)/(7개입)은 통과
-    if(/\d\s*\+\s*\d/.test(clean))continue;
+  const SKIP=t=>/^(선택안함|선택\s*안함|선택없음|보틀\s*필요\s*없음|없음|-)$/.test(t);
+  let i=0;
+  while(i<tokens.length){
+    const clean=stripNoise(tokens[i]);
+    if(!clean||SKIP(clean)||/\d\s*\+\s*\d/.test(clean)){i++;continue}
     const fl=normFlavor(clean);
-    if(!fl)continue;
-    const size=detectSize(clean, pname);
-    const qty=extractQty(clean);
+    if(!fl){i++;continue}
+    // 맛 토큰 뒤의 "맛 없는 사이즈/수량 수식어"(40g, 7개, 대용량 등)를 흡수
+    // 예: "바나나맛, 40g, 7개" → 한 아이템(바나나 7개입)으로 결합
+    let desc=clean, j=i+1;
+    while(j<tokens.length){
+      const nxt=stripNoise(tokens[j]);
+      if(!nxt){j++;continue}
+      if(normFlavor(nxt))break;                 // 다음 맛 토큰이면 중단(별도 아이템)
+      if(SKIP(nxt)){j++;continue}
+      if(/\d+\s*g|대용량|개입|\d+\s*[개통포팩봉]/.test(nxt)){desc+=' '+nxt;j++;continue}
+      break;
+    }
+    // 사이즈 결정: "7개"/"7개입" 있으면 7개입(7p), 아니면 일반 규칙
+    let size, qty;
+    if(/7\s*개입|7\s*개(?!\s*입)|\(7개입\)|7\s*入/.test(desc)){
+      size='7p';
+      const rest=desc.replace(/7\s*개입|7\s*개|7\s*入裝?/g,' ');  // 팩 표기 제거 후 별도 수량
+      qty=extractQty(rest)||1;
+    }else{
+      size=detectSize(desc, pname);
+      qty=extractQty(desc);
+    }
     const sku=lookupSKU(fl,size);
     if(sku)out.push({c:sku.c,q:qty});
+    i=j;
   }
   return out;
 }
