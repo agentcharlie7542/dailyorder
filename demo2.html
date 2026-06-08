@@ -283,6 +283,7 @@ tr.group-edited:hover td{background:#fef9c3}
 <div class="acts">
 <button class="btn btn-g" onclick="addRule()">＋ 학습규칙 추가</button>
 <button class="btn btn-y" id="learnAllTruthBtn" onclick="learnAllFromTruth()" disabled>📥 정답 파일 → 규칙 등록</button>
+<button class="btn btn-o" onclick="cleanupRules()" title="옛 마크업 패턴을 정규화로 변환 + 중복 병합 (누적 규칙 복구)">🔧 규칙 정리</button>
 <button class="btn btn-o" onclick="exportRules()">📤 내보내기</button>
 <button class="btn btn-o" onclick="document.getElementById('cr_import').click()">📥 가져오기</button>
 <input type="file" id="cr_import" accept=".json" style="display:none" onchange="importRules(this)">
@@ -314,7 +315,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V3.8';
+const APP_VERSION='V3.9';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1794,6 +1795,36 @@ function addRule(){
 }
 function delRule(i){const rs=loadRules();rs.splice(i,1);saveRules(rs);renderRules();showMsg('규칙이 삭제되었습니다.','var(--r)')}
 function clearRules(){if(!confirm('등록된 모든 학습규칙을 삭제하시겠습니까?'))return;saveRules([]);renderRules();showMsg('모든 규칙이 삭제되었습니다.','var(--r)')}
+// 규칙 정리/마이그레이션: 옛 마크업 패턴 → 정규화 변환 + 중복 병합 (누적 규칙 복구, 클리어 대신 사용)
+function cleanupRules(){
+  let rs=loadRules();
+  const before=rs.length;
+  if(!before){showMsg('정리할 규칙이 없습니다.','var(--m)');return}
+  if(!confirm(`등록된 ${before}개 규칙을 정리합니다.\n· 옛 마크업 패턴(<옵션>, 할인율 등) → 정규화\n· 같은 패턴 중복 병합 (최신 결과 유지)\n· 무효 규칙 제거\n\n삭제가 아니라 복구입니다. 진행할까요?`))return;
+  let migrated=0;
+  // 1) 마크업/할인율 포함 패턴을 정규화로 변환 (정규식 룰 /.../는 건드리지 않음)
+  rs.forEach(r=>{
+    if(!r.pattern||/^\/.+\/[gimsuy]*$/.test(r.pattern))return;
+    if(/[<>]|\(-?\d+\s*%/.test(r.pattern)){
+      const np=normOptJS(r.pattern, r.productName||'');
+      if(np&&np!==r.pattern){r.pattern=np;migrated++}
+    }
+  });
+  // 2) (pattern,target,productName) 중복 병합 — 뒤(최신)가 우선
+  const idxByKey=new Map();
+  const merged=[];
+  rs.forEach(r=>{
+    const k=r.pattern+'|'+(r.target||'all')+'|'+(r.productName||'');
+    if(idxByKey.has(k)){ merged[idxByKey.get(k)]=r; }
+    else{ idxByKey.set(k,merged.length); merged.push(r); }
+  });
+  // 3) 무효 제거 (빈 패턴/빈 결과)
+  const cleaned=merged.filter(r=>r.pattern&&r.results&&r.results.length);
+  saveRules(cleaned);renderRules();
+  const dupRemoved=rs.length-merged.length, invalidRemoved=merged.length-cleaned.length;
+  log(`규칙 정리: ${before} → ${cleaned.length}개 (정규화 ${migrated} · 중복병합 ${dupRemoved} · 무효제거 ${invalidRemoved})`,'ok');
+  showMsg(`✓ 정리 완료: ${before}→${cleaned.length}개 (정규화 ${migrated}, 병합 ${dupRemoved})`,'var(--g)');
+}
 function hardReset(){
   if(!confirm('모든 학습 데이터를 초기화합니다.\n\n• 학습규칙\n• 정확도 이력\n• Ollama 설정\n• 현재 화면 상태(Raw/정답/매핑/Diff)\n\n계속할까요?'))return;
   // localStorage 키 비우기
