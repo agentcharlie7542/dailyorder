@@ -319,7 +319,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.0';
+const APP_VERSION='V4.1';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1775,7 +1775,12 @@ function renderRules(){
   const tgtLabel={all:'전체',option:'옵션',name:'상품명'};
   list.innerHTML=rs.map((r,i)=>{
     const resStr=r.results.map(x=>{const code=padCode(x.code);const nm=SKU_CATALOG_ALL[code]||'코드 '+code;return `<code>${code}</code> ${nm} ×${x.qty}`}).join(' + ');
-    return `<div class="rule-item"><div class="idx">#${i+1}</div><div class="pat"><div class="p">${escapeHtml(r.pattern)}</div><div class="meta">대상: ${tgtLabel[r.target]||r.target}${r.note?' · '+escapeHtml(r.note):''}</div><div class="res">→ ${resStr}</div></div><button class="btn btn-r" style="padding:4px 10px;font-size:10px" onclick="delRule(${i})">삭제</button></div>`;
+    // 상품명 / 옵션(패턴)을 별도 라인으로 표시
+    const prodLine=r.productName
+      ? `<div class="p"><span style="color:var(--m);font-weight:400">상품명:</span> ${escapeHtml(r.productName)}</div>`
+      : `<div class="p"><span style="color:var(--m);font-weight:400">상품명:</span> <span style="color:var(--m)">(전 상품 적용)</span></div>`;
+    const optLine=`<div class="p" style="margin-top:2px"><span style="color:var(--m);font-weight:400">옵션:</span> ${escapeHtml(r.pattern)}</div>`;
+    return `<div class="rule-item"><div class="idx">#${i+1}</div><div class="pat">${prodLine}${optLine}<div class="meta">대상: ${tgtLabel[r.target]||r.target}${r.note?' · '+escapeHtml(r.note):''}</div><div class="res">→ ${resStr}</div></div><button class="btn btn-r" style="padding:4px 10px;font-size:10px" onclick="delRule(${i})">삭제</button></div>`;
   }).join('');
 }
 function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
