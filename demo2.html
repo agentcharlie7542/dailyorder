@@ -211,6 +211,7 @@ tr.group-edited:hover td{background:#fef9c3}
   <button class="btn btn-p" id="cmpBtn" onclick="compareNow()" disabled>🔬 정답 대조 실행</button>
   <button class="btn btn-y" id="learnURBtn" onclick="learnUnmappedFromTruth()" disabled>🧠 미매핑 → 정답 학습</button>
   <button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button>
+  <label style="font-size:11px;color:var(--t);display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="dedupChk"> 중복 제거(고유 매핑만)</label>
   <span id="cmpHint" style="font-size:11px;color:var(--m);margin-left:6px"></span>
 </div>
 </div></div>
@@ -323,7 +324,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.8';
+const APP_VERSION='V4.9';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -534,6 +535,7 @@ function normFlavor(token){
 function detectSize(token, pname){
   const t=String(token||''); const p=String(pname||'');
   if(/7\s*개입|세트\s*\(\s*7\s*개입\s*\)|7\s*入裝|\(7개입\)|_7개\b/.test(t))return '7p';
+  if(/낱포/.test(t))return '40';            // 규칙3: 낱포 = 40g
   if(/대용량|560\s*g/.test(t))return '560';
   if(/450\s*g/.test(t))return '450';
   if(/40\s*g(?!\d)/.test(t))return '40';
@@ -558,7 +560,8 @@ function lookupSKU(flavor, size){
 }
 function applySpecialDeal(optText){
   const r=[]; const s=String(optText||'');
-  if(/트라이탄.*?(쉐이커|보틀)|보틀.*?증정|전용\s*보틀(?!\s*선택)/.test(s)) r.push({c:'00035',q:1});
+  // 보틀: 트라이탄/보틀증정/전용보틀 + "N통+보틀"·"+보틀" (규칙6) — "보틀 선택/필요없음"은 제외
+  if(/트라이탄.*?(쉐이커|보틀)|보틀.*?증정|전용\s*보틀(?!\s*선택|\s*필요)|\+\s*보틀|통\s*\+\s*보틀/.test(s)) r.push({c:'00035',q:1});
   if(/애사비.*?젤리컷|혈당.*?down/i.test(s)) r.push({c:'00033',q:1});
   if(/스타터.*?팩.*?7종|7종.*?스타터.*?팩/.test(s)) r.push({c:'00064',q:1});
   return r;
@@ -567,8 +570,40 @@ function applyPackageBundle(optText){
   const r=[]; const s=String(optText||'');
   if(/스타터.*?팩.*?5개입|5종.*?스타터/.test(s)) r.push({c:'00065',q:1});
   if(/스타터.*?팩.*?10개입|10종.*?스타터|綜合口味10包入/.test(s)) r.push({c:'00066',q:1});
-  if(/스타터.*?팩.*?11개입|11가지\s*맛\s*세트/.test(s)) r.push({c:'00086',q:1});
+  if(/스타터.*?팩.*?11개입|스타터.*?팩.*?11종|11가지\s*맛\s*세트/.test(s)) r.push({c:'00086',q:1});  // 규칙6: 11종
   return r;
+}
+// 규칙7: 판매처 상품명에 보틀증정/전용보틀증정 → 보틀 추가
+function bottleFromProductName(pname){
+  return /보틀\s*증정|전용\s*보틀\s*증정/.test(String(pname||''));
+}
+// 카페24 등: 태그 없는 옵션을 <옵션>(패키지/필수/단독특가) / <추가옵션>(맛 선택)으로 분리 (규칙2)
+function splitPackageFlavors(opt){
+  let s=normTextJS(opt);
+  if(!s||/<추가옵션>/.test(s))return null;
+  if(!/패키지\s*선택\s*=|필수\s*(옵션|선택)\s*=/.test(s))return null;  // 카페24 패키지 포맷만
+  // 1) "맛 선택=" 기준 분리 (가장 명확)
+  let idx=s.search(/맛\s*선택\s*=/);
+  if(idx>=0)return [s.slice(0,idx).trim(), s.slice(idx).trim()];
+  // 2) "단독 특가=" 값 끝(선택안함 / (NNN원)) 이후 = 맛
+  const dm=s.match(/단독\s*특가\s*=/);
+  if(dm){
+    const after=dm.index+dm[0].length; const val=s.slice(after);
+    const mNone=val.match(/^\s*선택\s*안함/); const mPrice=val.match(/\([0-9,]+\s*원\)/);
+    let valEnd=null;
+    if(mNone)valEnd=after+val.indexOf(mNone[0])+mNone[0].length;
+    else if(mPrice)valEnd=after+mPrice.index+mPrice[0].length;
+    if(valEnd!=null){
+      const a=s.slice(0,valEnd).trim();
+      const bRaw=s.slice(valEnd).replace(/^[\s,]+/,'').trim();
+      return [a, bRaw];
+    }
+  }
+  // 3) 단독특가 없음: 패키지 값 이후 첫 맛 토큰 전에서 분리
+  //    맛 토큰: (NEW/UPGRADE )맛이름맛 | 맛이름_(대용량|7개|세트) | 맛이름맛 (대용량|세트|N개)
+  const fm=s.search(/(NEW\s+|UPGRADE\s+)?[가-힣]+맛\s*(대용량|세트|\(7개입\)|\d+\s*개)|[가-힣]+_(대용량|7개|세트|낱포)/);
+  if(fm>0)return [s.slice(0,fm).trim(), s.slice(fm).trim()];
+  return [s, ''];
 }
 function expandColorPack(content, pname){
   const out=[];
@@ -662,6 +697,11 @@ function parseOption(option, prodName, prodCode, orderQty){
   if(opM){ mainPart=opM[1] }
   if(adM){ addPart=adM[1] }
   else if(infoM){ addPart=infoM[1]; mainPart=opt.replace(/<옵션정보>.*$|<옵션명>.*$/s,'') }
+  else if(!opM){
+    // 규칙2: 태그 없는 카페24 패키지 옵션 → <옵션>(패키지/단독특가) / <추가옵션>(맛) 분리
+    const sp=splitPackageFlavors(opt);
+    if(sp){ mainPart=sp[0]; addPart=sp[1]; }
+  }
   const dealSkus=applySpecialDeal(mainPart||opt);
   const bundleSkus=applyPackageBundle(mainPart||opt);
   const mainSrc=mainPart||opt;
@@ -704,6 +744,8 @@ function parseOption(option, prodName, prodCode, orderQty){
       if(sku)acc.set(sku.c,qm?parseInt(qm[1],10):1);
     }
   }
+  // 규칙7: 판매처 상품명에 보틀증정 → 보틀(00035) 추가 (옵션에서 이미 안 나왔을 때만)
+  if(bottleFromProductName(pn) && !acc.has('00035') && acc.size){ acc.set('00035',1); }
   const out=[];
   for(const [c,q] of acc){
     out.push({c,n:SKU_CATALOG_ALL[c]||('코드 '+c),q});
@@ -1756,11 +1798,23 @@ function tv(w){document.getElementById('mv').classList.toggle('hidden',w!=='m');
 
 function dl(){
   const wb=XLSX.utils.book_new();
-  const d1=MR.map(r=>({'판매처명':r.v,'판매처 상품코드':r.pc,'판매처 상품명':r.pn,'판매처 옵션':r.opt,'상품코드':r.sc,'상품명':r.sn,'수량':r.q,'관리번호':r.mg,'매칭방식':r.mt}));
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d1),'매핑완료');
+  const dedup=document.getElementById('dedupChk')&&document.getElementById('dedupChk').checked;
+  let rows=MR;
+  if(dedup){
+    // 규칙1: 동일 (판매처상품명, 판매처옵션, 상품코드) 중복 제거 → 고유 매핑 1행 (수량 합산)
+    const seen=new Map();
+    MR.forEach(r=>{
+      const k=normPnJS(r.pn||'')+'|'+normOptJS(r.opt||'',r.pn||'')+'|'+padCode(r.sc);
+      if(seen.has(k)){ seen.get(k).q+=(Number(r.q)||0); }
+      else{ seen.set(k,{...r,q:Number(r.q)||0}); }
+    });
+    rows=[...seen.values()];
+  }
+  const d1=rows.map(r=>({'판매처명':r.v,'판매처 상품코드':r.pc,'판매처 상품명':r.pn,'판매처 옵션':r.opt,'상품코드':r.sc,'상품명':r.sn,'수량':r.q,'관리번호':dedup?'':r.mg,'매칭방식':r.mt}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d1),dedup?'고유매핑':'매핑완료');
   if(UR.length){const d2=UR.map(r=>({'관리번호':r.mg,'판매처':r.v,'상품코드':r.pc,'상품명':r.pn,'옵션':r.opt,'수량':r.q,'사유':r.why}));XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d2),'미매핑');}
-  XLSX.writeFile(wb,`밀잇_매핑결과_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
-  log('Excel 다운로드 완료','ok');
+  XLSX.writeFile(wb,`밀잇_매핑결과${dedup?'_고유':''}_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+  log(`Excel 다운로드 완료 (${dedup?'고유매핑 '+d1.length+'행':'전체 '+d1.length+'행'})`,'ok');
 }
 
 function clr(){OD=[];OD_FILES=[];MR=[];UR=[];RD=[];RD_FILES=[];DIFF=[];ITER=0;updateOCard();updateRsCard();document.getElementById('lg').innerHTML='<div class="i">// 초기화됨 (내장 파싱규칙 유지)</div>';['ss','ps','ds'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('mb').disabled=true;document.getElementById('of').value='';document.getElementById('rsf').value='';updateStepper()}
