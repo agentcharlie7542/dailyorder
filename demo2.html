@@ -324,7 +324,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V5.0';
+const APP_VERSION='V5.1';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1591,6 +1591,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(cfg.model&&document.getElementById('olm_model'))document.getElementById('olm_model').value=cfg.model;
   renderAccHistory();
   updateStepper();
+  // 중복 제거 체크 상태 복원 (한 번 켜면 유지)
+  try{const dc=document.getElementById('dedupChk');if(dc&&localStorage.getItem('mealit_dedup_default')==='1')dc.checked=true}catch(e){}
 });
 function dlDiff(){
   if(!DIFF.length){log('대조 데이터 없음','w');return}
@@ -1803,17 +1805,21 @@ function renderU(){
 function tv(w){document.getElementById('mv').classList.toggle('hidden',w!=='m');document.getElementById('uv').classList.toggle('hidden',w!=='u')}
 
 // 규칙1: 동일 (판매처상품명, 판매처옵션, 상품코드) 중복 제거 → 고유 매핑 1행
-// 수량은 합산하지 않고 "옵션 1단위 수량" 유지 (WMS가 주문 수만큼 자체 곱하므로 합산하면 중복됨)
+// ★ 관리번호(mg)는 키에서 제외 — 관리번호만 다르면 같은 매핑으로 통합
+// ★ 수량은 합산하지 않고 "옵션 1단위 수량" 유지 (WMS가 주문 수만큼 자체 곱하므로 합산하면 중복됨)
 function dedupMR(src){
   const seen=new Map();
   (src||MR).forEach(r=>{
-    const k=normPnJS(r.pn||'')+'|'+normOptJS(r.opt||'',r.pn||'')+'|'+padCode(r.sc);
+    // 키 = 정규화(판매처상품명) | 정규화(판매처옵션) | 상품코드  (관리번호 미포함)
+    const k=normPnJS(r.pn||'')+'|||'+normOptJS(r.opt||'',r.pn||'')+'|||'+padCode(r.sc);
     if(!seen.has(k)) seen.set(k,{...r,q:Number(r.q)||0,_m:true});  // 첫 행(1단위)만 유지
   });
   return [...seen.values()];
 }
+const DEDUP_KEY='mealit_dedup_default';
 function isDedup(){const c=document.getElementById('dedupChk');return !!(c&&c.checked)}
 function onDedupToggle(){
+  try{localStorage.setItem(DEDUP_KEY,isDedup()?'1':'0')}catch(e){}  // 상태 기억
   renderM();
   const dd=isDedup();
   const n=dd?dedupMR(MR).length:MR.length;
