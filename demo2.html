@@ -211,7 +211,7 @@ tr.group-edited:hover td{background:#fef9c3}
   <button class="btn btn-p" id="cmpBtn" onclick="compareNow()" disabled>🔬 정답 대조 실행</button>
   <button class="btn btn-y" id="learnURBtn" onclick="learnUnmappedFromTruth()" disabled>🧠 미매핑 → 정답 학습</button>
   <button class="btn btn-g" onclick="dl()">⬇ Excel 다운로드</button>
-  <label style="font-size:11px;color:var(--t);display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="dedupChk"> 중복 제거(고유 매핑만)</label>
+  <label style="font-size:11px;color:var(--t);display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="dedupChk" onchange="onDedupToggle()"> 중복 제거(고유 매핑만)</label>
   <span id="cmpHint" style="font-size:11px;color:var(--m);margin-left:6px"></span>
 </div>
 </div></div>
@@ -324,7 +324,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V4.9';
+const APP_VERSION='V5.0';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -1635,21 +1635,25 @@ function updateEditCount(){
 }
 function renderM(){
   const tb=document.getElementById('mt');tb.innerHTML='';
+  const dd=isDedup();  // 중복 제거 보기 (체크 시 화면도 고유 매핑만)
+  const rows=dd?dedupMR(MR):MR;
   // 그룹키 부여 (관리번호 없으면 첫행 인덱스 사용)
   let curGroup=null;
   MR.forEach((r,i)=>{
     if(r._m){curGroup=r.mg||('_idx_'+i)}
     r._groupKey=curGroup;
   });
-  MR.slice(0,500).forEach((r,idx)=>{
+  // 미리보기 헤더에 모드 표시
+  const dhint=document.getElementById('cmpHint');
+  rows.slice(0,500).forEach((r,idx)=>{
     const tr=document.createElement('tr');
     if(r._m)tr.classList.add('rm');
     if(r._edited)tr.classList.add('group-edited');
 
-    // 그룹 식별 표시 (첫 행에 + 버튼)
+    // 그룹 식별 표시 (첫 행에 + 버튼) — 중복 제거 보기에서는 비활성
     const tdMark=document.createElement('td');
     tdMark.style.textAlign='center';tdMark.style.color='var(--m)';tdMark.style.fontSize='10px';
-    if(r._m){
+    if(r._m && !dd){
       const addBtn=document.createElement('button');
       addBtn.className='add-row-btn';
       addBtn.textContent='+';
@@ -1661,7 +1665,8 @@ function renderM(){
 
     [['v',r.v,false],['pc',r.pc,false],['pn',r.pn,false],['opt',r.opt,false],
      ['sc',r.sc,true],['sn',r.sn,false],['q',r.q,true],
-     ['mg',r.mg,false],['mt',r.mt,false]].forEach(([field,val,editable])=>{
+     ['mg',dd?'':r.mg,false],['mt',r.mt,false]].forEach(([field,val,editable0])=>{
+      const editable=editable0 && !dd;  // 중복 제거 보기는 읽기 전용
       const td=document.createElement('td');
       td.textContent=val||'';td.title=val||'';
       if(editable){
@@ -1697,9 +1702,10 @@ function renderM(){
       tr.appendChild(td);
     });
 
-    // 삭제 버튼
+    // 삭제 버튼 (중복 제거 보기에서는 숨김)
     const tdDel=document.createElement('td');
     tdDel.style.textAlign='center';
+    if(dd){ tr.appendChild(tdDel); tb.appendChild(tr); return; }
     const delBtn=document.createElement('button');
     delBtn.className='del-btn';
     delBtn.textContent='×';
@@ -1796,20 +1802,30 @@ function renderU(){
 }
 function tv(w){document.getElementById('mv').classList.toggle('hidden',w!=='m');document.getElementById('uv').classList.toggle('hidden',w!=='u')}
 
+// 규칙1: 동일 (판매처상품명, 판매처옵션, 상품코드) 중복 제거 → 고유 매핑 1행
+// 수량은 합산하지 않고 "옵션 1단위 수량" 유지 (WMS가 주문 수만큼 자체 곱하므로 합산하면 중복됨)
+function dedupMR(src){
+  const seen=new Map();
+  (src||MR).forEach(r=>{
+    const k=normPnJS(r.pn||'')+'|'+normOptJS(r.opt||'',r.pn||'')+'|'+padCode(r.sc);
+    if(!seen.has(k)) seen.set(k,{...r,q:Number(r.q)||0,_m:true});  // 첫 행(1단위)만 유지
+  });
+  return [...seen.values()];
+}
+function isDedup(){const c=document.getElementById('dedupChk');return !!(c&&c.checked)}
+function onDedupToggle(){
+  renderM();
+  const dd=isDedup();
+  const n=dd?dedupMR(MR).length:MR.length;
+  const s4=document.getElementById('s4');if(s4)s4.textContent=n;
+  const hint=document.getElementById('cmpHint');
+  if(hint)hint.textContent=dd?`고유 매핑 ${n}행 (중복 ${MR.length-n}행 제거됨, 1단위 수량)`:'';
+  log(dd?`중복 제거 보기: ${MR.length}→${n}행 (고유 매핑)`:'중복 제거 해제: 전체 행 표시','i');
+}
 function dl(){
   const wb=XLSX.utils.book_new();
-  const dedup=document.getElementById('dedupChk')&&document.getElementById('dedupChk').checked;
-  let rows=MR;
-  if(dedup){
-    // 규칙1: 동일 (판매처상품명, 판매처옵션, 상품코드) 중복 제거 → 고유 매핑 1행 (수량 합산)
-    const seen=new Map();
-    MR.forEach(r=>{
-      const k=normPnJS(r.pn||'')+'|'+normOptJS(r.opt||'',r.pn||'')+'|'+padCode(r.sc);
-      if(seen.has(k)){ seen.get(k).q+=(Number(r.q)||0); }
-      else{ seen.set(k,{...r,q:Number(r.q)||0}); }
-    });
-    rows=[...seen.values()];
-  }
+  const dedup=isDedup();
+  const rows=dedup?dedupMR(MR):MR;
   const d1=rows.map(r=>({'판매처명':r.v,'판매처 상품코드':r.pc,'판매처 상품명':r.pn,'판매처 옵션':r.opt,'상품코드':r.sc,'상품명':r.sn,'수량':r.q,'관리번호':dedup?'':r.mg,'매칭방식':r.mt}));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d1),dedup?'고유매핑':'매핑완료');
   if(UR.length){const d2=UR.map(r=>({'관리번호':r.mg,'판매처':r.v,'상품코드':r.pc,'상품명':r.pn,'옵션':r.opt,'수량':r.q,'사유':r.why}));XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d2),'미매핑');}
