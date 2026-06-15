@@ -324,7 +324,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V5.1';
+const APP_VERSION='V5.2';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -604,6 +604,23 @@ function splitPackageFlavors(opt){
   const fm=s.search(/(NEW\s+|UPGRADE\s+)?[가-힣]+맛\s*(대용량|세트|\(7개입\)|\d+\s*개)|[가-힣]+_(대용량|7개|세트|낱포)/);
   if(fm>0)return [s.slice(0,fm).trim(), s.slice(fm).trim()];
   return [s, ''];
+}
+// 규칙2: 카페24 주문 옵션에 <옵션>/<추가옵션> 태그 삽입 (담당자 정답 포맷과 동일하게)
+//  · 판매처옵션이 공란이 아니면 맨 앞에 <옵션> (앞뒤 공백 없이)
+//  · 맛/용량을 선택하는 문구(맛 선택= / 단독특가 값 끝 / 첫 맛 토큰) 앞에 <추가옵션> 삽입
+//  → 표시·다운로드·파싱이 모두 담당자 기준과 동일한 태그 구조를 사용
+function cafe24Tagize(rawOpt, vendor){
+  const opt=String(rawOpt||'');
+  if(!opt.trim())return opt;                                        // 공란 → 그대로
+  if(/<옵션>|<추가옵션>|<옵션정보>|<옵션명>/.test(opt))return opt;   // 이미 태그 있음 → 그대로
+  const isCafe=/카페\s*24|cafe\s*24/i.test(String(vendor||''));
+  const looksPkg=/패키지\s*선택\s*=|필수\s*(옵션|선택)\s*=/.test(opt);
+  if(!isCafe && !looksPkg)return opt;                               // 카페24도 패키지포맷도 아니면 미적용
+  const fixSp=t=>String(t||'').replace(/패키지선택/g,'패키지 선택');  // 담당자 표기와 동일하게 공백 정규화
+  const sp=splitPackageFlavors(opt);                               // 경계 = splitPackageFlavors 로직 재사용
+  if(sp && sp[1]) return '<옵션>'+fixSp(sp[0])+'<추가옵션>'+sp[1];
+  if(sp)          return '<옵션>'+fixSp(sp[0]);
+  return '<옵션>'+fixSp(normTextJS(opt));                           // 패키지 경계 없는 단순 옵션 → 전체를 <옵션>
 }
 function expandColorPack(content, pname){
   const out=[];
@@ -983,6 +1000,7 @@ function run(){
     const vendor=String(o['판매처이름']||o['판매처']||o['판매처명']||'').trim();
     const pcode=String(o['상품코드']||'').trim();
     const optionRaw=String(o['옵션']||'');
+    const optionTagged=cafe24Tagize(optionRaw, vendor);   // 규칙2: 카페24 → <옵션>/<추가옵션> 삽입
     const option=normOp(optionRaw);
     const oQty=Number(o['수량'])||1;
     const mgmt=String(o['관리번호']||'').trim();
@@ -995,20 +1013,20 @@ function run(){
     if(custom.length>0){
       // 펼쳐진 모든 행에 판매처명·상품코드·상품명·옵션·관리번호 표기 (_m은 그룹 첫 행 표시용)
       custom.forEach((p,i)=>{
-        MR.push({v:vendor,pc:pcode,pn:pName,opt:optionRaw,sc:p.c,sn:p.n,q:p.q,mg:mgmt,mt:'학습규칙',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
+        MR.push({v:vendor,pc:pcode,pn:pName,opt:optionTagged,sc:p.c,sn:p.n,q:p.q,mg:mgmt,mt:'학습규칙',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
       });
       okCount++;customCount++;
       log(`✓ #${mgmt} 학습규칙 (${custom.length}개)`,'c');
       return;
     }
 
-    // STEP 2: 내장 파싱규칙
-    const parsed=parseOption(optionRaw,pName,pcode,oQty);
+    // STEP 2: 내장 파싱규칙 (카페24 태그 삽입본으로 파싱 → 검증된 <옵션>/<추가옵션> 경로 사용)
+    const parsed=parseOption(optionTagged,pName,pcode,oQty);
     if(parsed.length>0){
       // 정답 파일은 옵션 1단위 구성으로 기록 → 주문수량 곱하지 않음 (옵션이 N개로 나눠지는 의미)
       // 펼쳐진 모든 행에 판매처명·상품코드·상품명·옵션·관리번호 표기
       parsed.forEach((p,i)=>{
-        MR.push({v:vendor,pc:pcode,pn:pName,opt:optionRaw,sc:p.c,sn:p.n,q:p.q,mg:mgmt,mt:'옵션파싱',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
+        MR.push({v:vendor,pc:pcode,pn:pName,opt:optionTagged,sc:p.c,sn:p.n,q:p.q,mg:mgmt,mt:'옵션파싱',_m:i===0,_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
       });
       okCount++;
       log(`✓ #${mgmt} 옵션파싱 (${parsed.length}개 상품)`,'ok');
@@ -1016,7 +1034,7 @@ function run(){
     }
 
     // STEP 4: 실패
-    UR.push({mg:mgmt,v:vendor,pc:pcode,pn:pName,opt:optionRaw,q:oQty,why:'매칭 규칙 없음',_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
+    UR.push({mg:mgmt,v:vendor,pc:pcode,pn:pName,opt:optionTagged,q:oQty,why:'매칭 규칙 없음',_orderKey:orderKey,_orderNo:orderNoRaw,_idx:idx});
     log(`✗ #${mgmt}: ${vendor}/${pcode} — 매칭 실패`,'e');
   });
 
