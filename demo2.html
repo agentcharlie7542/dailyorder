@@ -324,7 +324,7 @@ tr.group-edited:hover td{background:#fef9c3}
 </div>
 
 <script>
-const APP_VERSION='V5.2';
+const APP_VERSION='V5.3';
 let OD=[],OD_FILES=[],MR=[],UR=[];
 let RD=[],RD_FILES=[],DIFF=[];
 const CR_KEY='mealit_custom_rules_v2';
@@ -563,7 +563,8 @@ function applySpecialDeal(optText){
   // 보틀: 트라이탄/보틀증정/전용보틀 + "N통+보틀"·"+보틀" (규칙6) — "보틀 선택/필요없음"은 제외
   if(/트라이탄.*?(쉐이커|보틀)|보틀.*?증정|전용\s*보틀(?!\s*선택|\s*필요)|\+\s*보틀|통\s*\+\s*보틀/.test(s)) r.push({c:'00035',q:1});
   if(/애사비.*?젤리컷|혈당.*?down/i.test(s)) r.push({c:'00033',q:1});
-  if(/스타터.*?팩.*?7종|7종.*?스타터.*?팩/.test(s)) r.push({c:'00064',q:1});
+  // 스타터팩 7종 → 00064. 단, "(선택X)"·"선택 X"로 미선택 표시면 제외 (규칙3)
+  if((/스타터.*?팩.*?7종|7종.*?스타터.*?팩/.test(s)) && !/7종\s*\(?\s*선택\s*[xX✕×]/.test(s)) r.push({c:'00064',q:1});
   return r;
 }
 function applyPackageBundle(optText){
@@ -585,6 +586,10 @@ function splitPackageFlavors(opt){
   // 1) "맛 선택=" 기준 분리 (가장 명확)
   let idx=s.search(/맛\s*선택\s*=/);
   if(idx>=0)return [s.slice(0,idx).trim(), s.slice(idx).trim()];
+  // 1b) "맛 선택"(= 없음) + 바로 뒤 맛/포켓형 토큰 → 그 앞에서 분리 (규칙3: 패키지 요약 숫자 혼입 방지)
+  //     예) "...포켓 3개 맛 선택포켓형_쿠앤크 2개" → 패키지("포켓 3개")와 맛목록을 분리
+  let idxB=s.search(/맛\s*선택\s*(?=NEW\s|UPGRADE\s|포켓형?_|[가-힣]+맛|[가-힣]+_[가-힣])/);
+  if(idxB>=0)return [s.slice(0,idxB).trim(), s.slice(idxB).trim()];
   // 2) "단독 특가=" 값 끝(선택안함 / (NNN원)) 이후 = 맛
   const dm=s.match(/단독\s*특가\s*=/);
   if(dm){
@@ -601,7 +606,7 @@ function splitPackageFlavors(opt){
   }
   // 3) 단독특가 없음: 패키지 값 이후 첫 맛 토큰 전에서 분리
   //    맛 토큰: (NEW/UPGRADE )맛이름맛 | 맛이름_(대용량|7개|세트) | 맛이름맛 (대용량|세트|N개)
-  const fm=s.search(/(NEW\s+|UPGRADE\s+)?[가-힣]+맛\s*(대용량|세트|\(7개입\)|\d+\s*개)|[가-힣]+_(대용량|7개|세트|낱포)/);
+  const fm=s.search(/(NEW\s+|UPGRADE\s+)?[가-힣]+맛\s*(대용량|세트|\(7개입\)|\d+\s*개)|[가-힣]+_(대용량|7개|세트|낱포)|포켓형?_[가-힣]/);
   if(fm>0)return [s.slice(0,fm).trim(), s.slice(fm).trim()];
   return [s, ''];
 }
